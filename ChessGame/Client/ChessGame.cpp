@@ -71,16 +71,16 @@ int main(int argc, char **argv)
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
 	glutInitWindowPosition(0, 0);
 	glutInitWindowSize(WndSizeX, WndSizeY);
-	glutCreateWindow("Simple Client");
+	glutCreateWindow("Chess Client");
 
 	glewInit();
 	if (glewIsSupported("GL_VERSION_3_0"))
 	{
-		std::cout << " GLEW Version is 3.0\n ";
+		cout << " GLEW Version is 3.0\n ";
 	}
 	else
 	{
-		std::cout << "GLEW 3.0 not supported\n ";
+		cout << "GLEW 3.0 not supported\n ";
 	}
 
 	Player = make_unique<CPlayer>();
