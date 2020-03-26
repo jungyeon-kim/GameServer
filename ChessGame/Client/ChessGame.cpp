@@ -1,71 +1,42 @@
-/*
-Copyright 2017 Lee Taek Hee (Korea Polytech University)
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the What The Hell License. Do it plz.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY.
-*/
-
 #include "stdafx.h"
-#include "Player.h"
-#include "MapTile.h"
+#include "GameManager.h"
 
 using namespace std;
 
-unique_ptr<CPlayer> Player{};
-unique_ptr<CMapTile> MapTile{};
+unique_ptr<CGameManager> GameManager{};
 
 void RenderScene(void)
 {
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(0.0f, 0.3f, 0.3f, 1.0f);
-
-	MapTile->Render();
-	Player->Render();
-
-	glutSwapBuffers();
+	GameManager->Render();
 }
 
 void Idle(void)
 {
-	RenderScene();
+	GameManager->Idle();
 }
 
 void MouseInput(int button, int state, int x, int y)
 {
-	RenderScene();
+	GameManager->MouseInput(button, state, x, y);
 }
 
 void KeyInput(unsigned char key, int x, int y)
 {
-	RenderScene();
+	GameManager->KeyInput(key, x, y);
 }
 
 void SpecialKeyInput(int key, int x, int y)
 {
-	switch (key)
-	{
-	case GLUT_KEY_UP:
-		Player->SetY(Player->GetY() + WndSizeY / 8.0f);
-		break;
-	case GLUT_KEY_DOWN:
-		Player->SetY(Player->GetY() - WndSizeY / 8.0f);
-		break;
-	case GLUT_KEY_LEFT:
-		Player->SetX(Player->GetX() - WndSizeX / 8.0f);
-		break;
-	case GLUT_KEY_RIGHT:
-		Player->SetX(Player->GetX() + WndSizeX / 8.0f);
-		break;
-	}
-
-	RenderScene();
+	GameManager->SpecialKeyInput(key, x, y);
 }
 
 int main(int argc, char **argv)
 {
+	// Connect Server
+	char ServerIP[256]{};
+	cout << "Input Server IP: ";
+	cin >> ServerIP;
+
 	// Initialize GL things
 	glutInit(&argc, argv);
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
@@ -83,8 +54,7 @@ int main(int argc, char **argv)
 		cout << "GLEW 3.0 not supported\n ";
 	}
 
-	Player = make_unique<CPlayer>();
-	MapTile = make_unique<CMapTile>();
+	GameManager = make_unique<CGameManager>(ServerIP);
 
 	glutDisplayFunc(RenderScene);
 	glutIdleFunc(Idle);

@@ -1,12 +1,5 @@
 #pragma once
 
-#include <string>
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-
-#include "Dependencies\glew.h"
-
 class CRenderer
 {
 public:

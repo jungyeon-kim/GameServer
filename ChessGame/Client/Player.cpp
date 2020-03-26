@@ -4,12 +4,12 @@
 
 using namespace std;
 
-CPlayer::CPlayer()
+CPlayer::CPlayer(shared_ptr<class CRenderer> NewRenderer)
 {
-	Renderer = make_unique<CRenderer>(WndSizeX, WndSizeY);
+	Renderer = NewRenderer;
 
-	X = WndSizeX / 16.0f;
-	Y = WndSizeY / 16.0f;
+	PosX = WndSizeX / 16.0f;
+	PosY = WndSizeY / 16.0f;
 }
 
 CPlayer::~CPlayer()
@@ -18,25 +18,25 @@ CPlayer::~CPlayer()
 
 void CPlayer::Render()
 {
-	Renderer->DrawSolidRect(X, Y, 0.0f, WndSizeX / 10.0f, 1.0f, 1.0f, 1.0f, 1.0f);
+	Renderer->DrawSolidRect(PosX, PosY, 0.0f, WndSizeX / 10.0f, 1.0f, 1.0f, 1.0f, 1.0f);
 }
 
-float CPlayer::GetX() const
+float CPlayer::GetPosX() const
 {
-	return X;
+	return PosX;
 }
 
-float CPlayer::GetY() const
+float CPlayer::GetPosY() const
 {
-	return Y;
+	return PosY;
 }
 
-void CPlayer::SetX(float NewX)
+void CPlayer::SetPosX(float NewX)
 {
-	if (-WndSizeX / 2.0f < NewX && NewX < WndSizeX / 2.0f) X = NewX;
+	if (-WndSizeX / 2.0f < NewX && NewX < WndSizeX / 2.0f) PosX = NewX;
 }
 
-void CPlayer::SetY(float NewY)
+void CPlayer::SetPosY(float NewY)
 {
-	if (-WndSizeY / 2.0f < NewY && NewY < WndSizeY / 2.0f) Y = NewY;
+	if (-WndSizeY / 2.0f < NewY && NewY < WndSizeY / 2.0f) PosY = NewY;
 }

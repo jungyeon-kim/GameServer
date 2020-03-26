@@ -3,16 +3,16 @@
 class CPlayer
 {
 private:
-	float X{}, Y{};
-	std::unique_ptr<class CRenderer> Renderer{};
+	float PosX{}, PosY{};
+	std::shared_ptr<class CRenderer> Renderer{};
 public:
-	CPlayer();
+	CPlayer(std::shared_ptr<class CRenderer> NewRenderer);
 	~CPlayer();
 
 	void Render();
 
-	float GetX() const;
-	float GetY() const;
-	void SetX(float NewX);
-	void SetY(float NewY);
+	float GetPosX() const;
+	float GetPosY() const;
+	void SetPosX(float NewX);
+	void SetPosY(float NewY);
 };

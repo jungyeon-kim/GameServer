@@ -4,9 +4,9 @@
 
 using namespace std;
 
-CMapTile::CMapTile()
+CMapTile::CMapTile(std::shared_ptr<class CRenderer> NewRenderer)
 {
-	Renderer = make_unique<CRenderer>(WndSizeX, WndSizeY);
+	Renderer = NewRenderer;
 }
 
 CMapTile::~CMapTile()

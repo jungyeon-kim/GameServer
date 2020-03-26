@@ -1,11 +1,12 @@
 #include "stdafx.h"
 #include "Renderer.h"
+#include <cstdlib>
+#include <fstream>
 
 CRenderer::CRenderer(int windowSizeX, int windowSizeY)
 {
 	Initialize(windowSizeX, windowSizeY);
 }
-
 
 CRenderer::~CRenderer()
 {
@@ -60,7 +61,7 @@ void CRenderer::AddShader(GLuint ShaderProgram, const char* pShaderText, GLenum 
 	const GLchar* p[1];
 	p[0] = pShaderText;
 	GLint Lengths[1];
-	Lengths[0] = strlen(pShaderText);
+	Lengths[0] = (GLint)strlen(pShaderText);
 	//쉐이더 코드를 쉐이더 오브젝트에 할당
 	glShaderSource(ShaderObj, 1, p, Lengths);
 

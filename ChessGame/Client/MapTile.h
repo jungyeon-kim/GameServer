@@ -3,9 +3,9 @@
 class CMapTile
 {
 private:
-	std::unique_ptr<class CRenderer> Renderer{};
+	std::shared_ptr<class CRenderer> Renderer{};
 public:
-	CMapTile();
+	CMapTile(std::shared_ptr<class CRenderer> NewRenderer);
 	~CMapTile();
 
 	void Render();
