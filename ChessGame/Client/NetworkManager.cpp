@@ -3,7 +3,8 @@
 
 CNetworkManager::CNetworkManager(const char* ServerIP)
 {
-	if (WSAStartup(MAKEWORD(2, 2), &WSAData) != 0) return;
+	WSADATA wsa;
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return;
 
 	// socket()
 	Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);

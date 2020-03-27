@@ -4,7 +4,6 @@
 class CNetworkManager
 {
 private:
-	WSADATA WSAData{};
 	SOCKET Socket{};
 	PACKET Packet{};
 public:

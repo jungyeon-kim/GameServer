@@ -18,7 +18,7 @@ struct PACKET
 };
 #pragma pack (pop)
 
-PACKET Process(PACKET PACKET)
+PACKET Process(PACKET& PACKET)
 {
 	switch (PACKET.Key)
 	{
@@ -95,7 +95,6 @@ int main(int argc, char* argv[])
 	SOCKADDR_IN clientaddr;
 	PACKET packet;
 	int addrlen;
-	char buf[BUFSIZE + 1];
 
 	while (1) {
 		// accept() -> 접속한 클라이언트와 통신 가능하도록 새로운 소켓을 만들어 리턴
