@@ -45,9 +45,6 @@
     <ClCompile Include="Player.cpp">
       <Filter>소스 파일\1.Actor</Filter>
     </ClCompile>
-    <ClCompile Include="NetworkManager.cpp">
-      <Filter>소스 파일\0.Manager</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Renderer.h">
@@ -68,8 +65,8 @@
     <ClInclude Include="Player.h">
       <Filter>헤더 파일\1.Actor</Filter>
     </ClInclude>
-    <ClInclude Include="NetworkManager.h">
-      <Filter>헤더 파일\0.Manager</Filter>
+    <ClInclude Include="..\Server\Protocol.h">
+      <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

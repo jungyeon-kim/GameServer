@@ -146,7 +146,6 @@
     <ClCompile Include="ChessGame.cpp" />
     <ClCompile Include="GameManager.cpp" />
     <ClCompile Include="MapTile.cpp" />
-    <ClCompile Include="NetworkManager.cpp" />
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="stdafx.cpp">
@@ -155,9 +154,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\Server\Protocol.h" />
     <ClInclude Include="GameManager.h" />
     <ClInclude Include="MapTile.h" />
-    <ClInclude Include="NetworkManager.h" />
     <ClInclude Include="Player.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="stdafx.h" />

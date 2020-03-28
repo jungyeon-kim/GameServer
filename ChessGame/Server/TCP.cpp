@@ -1,42 +1,45 @@
 #pragma comment(lib, "ws2_32.lib")
 
+#include <iostream>
 #include <cstdlib>
 #include <cstdio>
 #include <WS2tcpip.h>
+#include "Protocol.h"
 
-#define SERVERPORT 9000
-#define BUFSIZE 512
+using namespace std;
 
 constexpr int WndSizeX{ 400 };
 constexpr int WndSizeY{ 400 };
 
-#pragma pack (push, 1)
-struct PACKET
+void Process(char* CSBuf, char* SCBuf)
 {
-	char Key{};
-	float PosX{}, PosY{};
-};
-#pragma pack (pop)
-
-PACKET Process(PACKET& PACKET)
-{
-	switch (PACKET.Key)
+	switch (CSBuf[0])
 	{
-	case VK_UP:
-		PACKET.PosY += WndSizeY / 8.0f;
-		break;
-	case VK_DOWN:
-		PACKET.PosY -= WndSizeY / 8.0f;
-		break;
-	case VK_LEFT:
-		PACKET.PosX -= WndSizeY / 8.0f;
-		break;
-	case VK_RIGHT:
-		PACKET.PosX += WndSizeY / 8.0f;
+	case CS_MOVE:
+	{
+		CS_MovePacket* CSPacket{ reinterpret_cast<CS_MovePacket*>(CSBuf) };
+		SC_PosPacket* SCPacket{ reinterpret_cast<SC_PosPacket*>(SCBuf) };
+
+		SCPacket->Type = SC_POS;
+		SCPacket->Size = sizeof(SC_PosPacket);
+		switch (CSPacket->Key)
+		{
+		case VK_UP:
+			SCPacket->PosY = WndSizeY / 8.0f;
+			break;
+		case VK_DOWN:
+			SCPacket->PosY = -WndSizeY / 8.0f;
+			break;
+		case VK_LEFT:
+			SCPacket->PosX = -WndSizeX / 8.0f;
+			break;
+		case VK_RIGHT:
+			SCPacket->PosX = WndSizeX / 8.0f;
+			break;
+		}
 		break;
 	}
-
-	return PACKET;
+	}
 }
 
 void err_quit(const char* msg)
@@ -93,7 +96,7 @@ int main(int argc, char* argv[])
 	// 데이터 통신에 사용할 변수
 	SOCKET client_sock;
 	SOCKADDR_IN clientaddr;
-	PACKET packet;
+	char CSBuf[BUFSIZE + 1]{}, SCBuf[BUFSIZE + 1]{};
 	int addrlen;
 
 	while (1) {
@@ -112,7 +115,7 @@ int main(int argc, char* argv[])
 		// 클라이언트와 데이터 통신
 		while (1) {
 			// 데이터 받기
-			retval = recv(client_sock, (char*)&packet, sizeof(PACKET), 0);
+			retval = recv(client_sock, CSBuf, BUFSIZE, 0);
 			if (retval == SOCKET_ERROR) {
 				err_display("recv()");
 				break;
@@ -121,14 +124,15 @@ int main(int argc, char* argv[])
 				break;
 
 			// 데이터 처리
-			packet = Process((packet));
+			Process(CSBuf, SCBuf);
 
 			// 데이터 보내기
-			retval = send(client_sock, (char*)&packet, sizeof(PACKET), 0);
+			retval = send(client_sock, SCBuf, BUFSIZE, 0);
 			if (retval == SOCKET_ERROR) {
 				err_display("send()");
 				break;
 			}
+			ZeroMemory(SCBuf, BUFSIZE);
 		}
 
 		// closesocket()
