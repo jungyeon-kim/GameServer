@@ -8,21 +8,21 @@ using namespace std;
 
 CGameManager::CGameManager(const char* ServerIP)
 {
-	WSADATA wsa;
-	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return;
+	WSADATA WSAData;
+	if (WSAStartup(MAKEWORD(2, 0), &WSAData) != 0) return;
 
 	// socket()
-	Socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	Socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, 0);
 	if (Socket == INVALID_SOCKET) err_quit("socket()");
-
+	
 	// connect()
-	SOCKADDR_IN serveraddr;
-	ZeroMemory(&serveraddr, sizeof(serveraddr));
-	serveraddr.sin_family = AF_INET;
-	serveraddr.sin_addr.s_addr = inet_addr(ServerIP);
-	serveraddr.sin_port = htons(SERVERPORT);
-	int retval = connect(Socket, (SOCKADDR*)&serveraddr, sizeof(serveraddr));
-	if (retval == SOCKET_ERROR) err_quit("connect() - falied");
+	SOCKADDR_IN ServerAddr;
+	memset(&ServerAddr, 0, sizeof(SOCKADDR_IN));
+	ServerAddr.sin_family = AF_INET;
+	ServerAddr.sin_addr.s_addr = inet_addr(ServerIP);
+	ServerAddr.sin_port = htons(SERVERPORT);
+	int Retval = connect(Socket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr));
+	if (Retval == SOCKET_ERROR) err_quit("connect() - falied");
 
 	Renderer = make_shared<CRenderer>(WndSizeX, WndSizeY);
 	Player = make_unique<CPlayer>(Renderer);
@@ -111,8 +111,8 @@ void CGameManager::Send(char* Packet)
 {
 	auto BasicPacket{ reinterpret_cast<PacketBase*>(Packet) };
 
-	int retval = send(Socket, Packet, BasicPacket->Size, 0);
-	if (retval == SOCKET_ERROR) err_display("send()");
+	int Retval = send(Socket, Packet, BasicPacket->Size, 0);
+	if (Retval == SOCKET_ERROR) err_display("send()");
 }
 
 void CGameManager::SendMovement(char Key)
@@ -128,10 +128,10 @@ void CGameManager::SendMovement(char Key)
 
 void CGameManager::Receive()
 {
-	static char Buf[BUFSIZE + 1]{};
+	static char Buf[MAX_BUFFER + 1]{};
 
-	int retval = recv(Socket, Buf, BUFSIZE, 0);
-	if (retval == SOCKET_ERROR) err_display("recv()");
+	int Retval = recv(Socket, Buf, MAX_BUFFER, 0);
+	if (Retval == SOCKET_ERROR) err_display("recv()");
 	
 	switch (Buf[0])
 	{
