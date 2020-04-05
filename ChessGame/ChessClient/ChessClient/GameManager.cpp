@@ -8,25 +8,29 @@ using namespace std;
 
 CGameManager::CGameManager(const char* ServerIP)
 {
+	Renderer = make_shared<CRenderer>(WndSizeX, WndSizeY);
+	MapTile = make_unique<CMapTile>(Renderer);
+
 	WSADATA WSAData;
-	if (WSAStartup(MAKEWORD(2, 0), &WSAData) != 0) return;
+	if (WSAStartup(MAKEWORD(2, 2), &WSAData) != 0) return;
 
 	// socket()
-	Socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, 0);
+	Socket = socket(AF_INET, SOCK_STREAM, 0);
 	if (Socket == INVALID_SOCKET) err_quit("socket()");
 	
 	// connect()
 	SOCKADDR_IN ServerAddr;
 	memset(&ServerAddr, 0, sizeof(SOCKADDR_IN));
 	ServerAddr.sin_family = AF_INET;
-	ServerAddr.sin_addr.s_addr = inet_addr(ServerIP);
 	ServerAddr.sin_port = htons(SERVERPORT);
+	inet_pton(AF_INET, ServerIP, &ServerAddr.sin_addr);
 	int Retval = connect(Socket, (SOCKADDR*)&ServerAddr, sizeof(ServerAddr));
 	if (Retval == SOCKET_ERROR) err_quit("connect() - falied");
 
-	Renderer = make_shared<CRenderer>(WndSizeX, WndSizeY);
-	Player = make_unique<CPlayer>(Renderer);
-	MapTile = make_unique<CMapTile>(Renderer);
+	// Make Thread
+	thread{ &CGameManager::Receive, this }.detach();
+
+	SendInit();
 }
 
 CGameManager::~CGameManager()
@@ -35,29 +39,36 @@ CGameManager::~CGameManager()
 	WSACleanup();
 }
 
+void CGameManager::Update()
+{
+}
+
 void CGameManager::Render()
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glClearColor(0.0f, 0.3f, 0.3f, 1.0f);
 
 	MapTile->Render();
-	Player->Render();
+	for (const auto& Player : Players) Player.second->Render();
 
 	glutSwapBuffers();
 }
 
 void CGameManager::Idle()
 {
+	Update();
 	Render();
 }
 
 void CGameManager::MouseInput(int button, int state, int x, int y)
 {
+	Update();
 	Render();
 }
 
 void CGameManager::KeyInput(unsigned char key, int x, int y)
 {
+	Update();
 	Render();
 }
 
@@ -78,8 +89,6 @@ void CGameManager::SpecialKeyInput(int key, int x, int y)
 		SendMovement(VK_RIGHT);
 		break;
 	}
-
-	Receive();
 }
 
 void CGameManager::err_quit(const char* Msg)
@@ -111,8 +120,18 @@ void CGameManager::Send(char* Packet)
 {
 	auto BasicPacket{ reinterpret_cast<PacketBase*>(Packet) };
 
-	int Retval = send(Socket, Packet, BasicPacket->Size, 0);
+	int Retval{ send(Socket, Packet, BasicPacket->Size, 0) };
 	if (Retval == SOCKET_ERROR) err_display("send()");
+}
+
+void CGameManager::SendInit()
+{
+	CS_InitPacket Packet{};
+
+	Packet.Type = CS_INIT;
+	Packet.Size = sizeof(Packet);
+
+	Send((char*)&Packet);
 }
 
 void CGameManager::SendMovement(char Key)
@@ -128,17 +147,36 @@ void CGameManager::SendMovement(char Key)
 
 void CGameManager::Receive()
 {
-	static char Buf[MAX_BUFFER + 1]{};
-
-	int Retval = recv(Socket, Buf, MAX_BUFFER, 0);
-	if (Retval == SOCKET_ERROR) err_display("recv()");
-	
-	switch (Buf[0])
+	while (true)
 	{
-	case SC_POS:
-		SC_PosPacket* Packet{ reinterpret_cast<SC_PosPacket*>(Buf) };
-		Player->SetPosX(Player->GetPosX() + Packet->PosX);
-		Player->SetPosY(Player->GetPosY() + Packet->PosY);
-		break;
+		static char Buf[MAX_BUFFER + 1]{};
+
+		int Retval{ recv(Socket, Buf, MAX_BUFFER, 0) };
+		if (Retval == SOCKET_ERROR) err_display("recv()");
+
+		switch (Buf[0])
+		{
+		case SC_INIT:
+		{
+			SC_InitPacket* Packet{ reinterpret_cast<SC_InitPacket*>(Buf) };
+			if (Players.find(Packet->ClientID) == Players.end())
+			{
+				Players.emplace(Packet->ClientID, make_unique<CPlayer>(Renderer));
+				Players[Packet->ClientID]->SetPosX(Packet->PosX);
+				Players[Packet->ClientID]->SetPosY(Packet->PosY);
+
+				//SendInit();
+			}
+			break;
+		}
+		case SC_POS:
+		{
+			SC_PosPacket* Packet{ reinterpret_cast<SC_PosPacket*>(Buf) };
+			Players.emplace(Packet->ClientID, make_unique<CPlayer>(Renderer));	// 임시코드
+			Players[Packet->ClientID]->SetPosX(Packet->PosX);
+			Players[Packet->ClientID]->SetPosY(Packet->PosY);
+			break;
+		}
+		}
 	}
 }

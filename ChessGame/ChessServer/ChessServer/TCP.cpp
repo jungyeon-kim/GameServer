@@ -1,5 +1,3 @@
-#pragma comment(lib, "ws2_32.lib")
-
 #include <iostream>
 #include <map>
 #include "Protocol.h"
@@ -33,15 +31,16 @@ void err_display(const char* msg)
 
 struct SOCKETINFO
 {
-	WSAOVERLAPPED Overlapped;
-	WSABUF DataBuffer;
-	SOCKET Socket;
-	char MsgBuffer[MAX_BUFFER];
+	WSAOVERLAPPED Overlapped{};
+	WSABUF DataBuffer{};
+	SOCKET Socket{};
+	char MsgBuffer[MAX_BUFFER]{};
+	float PosX{ WndSizeX / 16.0f }, PosY{ WndSizeY / 16.0f };
 };
 
-map<SOCKET, SOCKETINFO> Clients;
+map<SOCKET, SOCKETINFO> Clients{};
 
-void Process(SOCKET Client, char* CSBuf, char* SCBuf);
+void Process(SOCKET Socket, char* CSBuf, char* SCBuf);
 void CALLBACK Recv_CallBack(DWORD Error, DWORD DataBytes, LPWSAOVERLAPPED Overlapped, DWORD lnFlags);
 void CALLBACK Send_CallBack(DWORD Error, DWORD DataBytes, LPWSAOVERLAPPED Overlapped, DWORD lnFlags);
 
@@ -60,21 +59,24 @@ void CALLBACK Recv_CallBack(DWORD Error, DWORD DataBytes, LPWSAOVERLAPPED Overla
 	
 	Clients[Client_S].MsgBuffer[DataBytes] = 0;
 	cout << "From client : " << Clients[Client_S].MsgBuffer << " (" << DataBytes << " bytes)\n";
-	Clients[Client_S].DataBuffer.len = DataBytes;
-	memset(&(Clients[Client_S].Overlapped), 0, sizeof(WSAOVERLAPPED));
-	Clients[Client_S].Overlapped.hEvent = (HANDLE)Client_S;
 
 	// 받은 데이터 처리후 전송
 	memcpy(&CSBuf, Clients[Client_S].MsgBuffer, MAX_BUFFER);
 	Process(Client_S, CSBuf, SCBuf);
-	WSASend(Client_S, &(Clients[Client_S].DataBuffer), 1, NULL, 0, &(Clients[Client_S].Overlapped), Send_CallBack);
+	for (auto& Client : Clients)
+	{
+		Client.second.DataBuffer.len = SCBuf[1];
+		Client.second.DataBuffer.buf = SCBuf;
+		memset(&(Client.second.Overlapped), 0, sizeof(WSAOVERLAPPED));
+		Client.second.Overlapped.hEvent = (HANDLE)Client.first;
+		WSASend(Client.first, &(Client.second.DataBuffer), 1, NULL, 0,
+			&(Client.second.Overlapped), Send_CallBack);
+	}
 }
 
 void CALLBACK Send_CallBack(DWORD Error, DWORD DataBytes, LPWSAOVERLAPPED Overlapped, DWORD lnFlags)
 {
-	DWORD RecvBytes{};
 	DWORD Flags{};
-
 	int Client_S{ reinterpret_cast<int>(Overlapped->hEvent) };
 
 	if (!DataBytes) 
@@ -87,17 +89,47 @@ void CALLBACK Send_CallBack(DWORD Error, DWORD DataBytes, LPWSAOVERLAPPED Overla
 	// WSASend(응답에 대한)의 콜백일 경우
 	Clients[Client_S].DataBuffer.len = MAX_BUFFER;
 	Clients[Client_S].DataBuffer.buf = Clients[Client_S].MsgBuffer;
-
 	cout << "TRACE - Send message : " << Clients[Client_S].MsgBuffer << " (" << DataBytes << " bytes)\n";
 	memset(&(Clients[Client_S].Overlapped), 0, sizeof(WSAOVERLAPPED));
 	Clients[Client_S].Overlapped.hEvent = (HANDLE)Client_S;
 	WSARecv(Client_S, &Clients[Client_S].DataBuffer, 1, 0, &Flags, &(Clients[Client_S].Overlapped), Recv_CallBack);
 }
 
-void Process(SOCKET Client, char* CSBuf, char* SCBuf)
+void Process(SOCKET Socket, char* CSBuf, char* SCBuf)
 {
 	switch (CSBuf[0])
 	{
+	case CS_INIT:
+	{
+		SC_InitPacket* SCPacket{ reinterpret_cast<SC_InitPacket*>(SCBuf) };
+
+		// 새로운 클라이언트에게 기존 데이터 전송
+		//for (auto& Client : Clients)
+		//{
+		//	if (Client.first != Socket)
+		//	{
+		//		SCPacket->Type = SC_INIT;
+		//		SCPacket->Size = sizeof(SC_InitPacket);
+		//		SCPacket->ClientID = Client.second.Socket;
+		//		SCPacket->PosX = Client.second.PosX;
+		//		SCPacket->PosY = Client.second.PosY;
+
+		//		Clients[Socket].DataBuffer.len = SCPacket->Size;
+		//		Clients[Socket].DataBuffer.buf = (char*)SCPacket;
+		//		memset(&(Clients[Socket].Overlapped), 0, sizeof(WSAOVERLAPPED));
+		//		Clients[Socket].Overlapped.hEvent = (HANDLE)Socket;
+		//		WSASend(Socket, &(Clients[Socket].DataBuffer), 1, NULL, 0,
+		//			&(Clients[Socket].Overlapped), Send_CallBack);
+		//	}
+		//}
+
+		SCPacket->Type = SC_INIT;
+		SCPacket->Size = sizeof(SC_InitPacket);
+		SCPacket->ClientID = Socket;
+		SCPacket->PosX = Clients[Socket].PosX;
+		SCPacket->PosY = Clients[Socket].PosY;
+		break;
+	}
 	case CS_MOVE:
 	{
 		CS_MovePacket* CSPacket{ reinterpret_cast<CS_MovePacket*>(CSBuf) };
@@ -105,23 +137,29 @@ void Process(SOCKET Client, char* CSBuf, char* SCBuf)
 
 		SCPacket->Type = SC_POS;
 		SCPacket->Size = sizeof(SC_PosPacket);
+		SCPacket->ClientID = Socket;
+
 		switch (CSPacket->Key)
 		{
 		case VK_UP:
-			SCPacket->PosY = WndSizeY / 8.0f;
+			if (WndSizeX / 2.0f > Clients[Socket].PosY) Clients[Socket].PosY += WndSizeY / 8.0f;
+			if (WndSizeX / 2.0f <= Clients[Socket].PosY) Clients[Socket].PosY -= WndSizeY / 8.0f;
 			break;
 		case VK_DOWN:
-			SCPacket->PosY = -WndSizeY / 8.0f;
+			if (-WndSizeX / 2.0f < Clients[Socket].PosY) Clients[Socket].PosY -= WndSizeY / 8.0f;
+			if (-WndSizeX / 2.0f >= Clients[Socket].PosY) Clients[Socket].PosY += WndSizeY / 8.0f;
 			break;
 		case VK_LEFT:
-			SCPacket->PosX = -WndSizeX / 8.0f;
+			if (-WndSizeX / 2.0f < Clients[Socket].PosX) Clients[Socket].PosX -= WndSizeX / 8.0f;
+			if (-WndSizeX / 2.0f >= Clients[Socket].PosX) Clients[Socket].PosX += WndSizeX / 8.0f;
 			break;
 		case VK_RIGHT:
-			SCPacket->PosX = WndSizeX / 8.0f;
+			if (WndSizeX / 2.0f > Clients[Socket].PosX) Clients[Socket].PosX += WndSizeX / 8.0f;
+			if (WndSizeX / 2.0f <= Clients[Socket].PosX) Clients[Socket].PosX -= WndSizeX / 8.0f;
 			break;
 		}
-		Clients[Client].DataBuffer.len = SCPacket->Size;
-		Clients[Client].DataBuffer.buf = SCBuf;
+		SCPacket->PosX = Clients[Socket].PosX;
+		SCPacket->PosY = Clients[Socket].PosY;
 		break;
 	}
 	}
@@ -159,58 +197,18 @@ int main(int argc, char* argv[])
 	while (true) 
 	{
 		SOCKET ClientSocket{ accept(ListenSocket, (SOCKADDR*)&ClientAddr, &AddrLen) };
-		Clients[ClientSocket] = SOCKETINFO{};
+		SOCKETINFO SocketInfo{};
+		Clients.emplace(ClientSocket, SocketInfo);
 		Clients[ClientSocket].Socket = ClientSocket;
 		Clients[ClientSocket].DataBuffer.len = MAX_BUFFER;
 		Clients[ClientSocket].DataBuffer.buf = Clients[ClientSocket].MsgBuffer;
 		memset(&Clients[ClientSocket].Overlapped, 0, sizeof(WSAOVERLAPPED));
 		Clients[ClientSocket].Overlapped.hEvent = (HANDLE)Clients[ClientSocket].Socket;
-		DWORD flags = 0;
+
+		DWORD Flags{};
 		WSARecv(Clients[ClientSocket].Socket, &Clients[ClientSocket].DataBuffer, 1, NULL,
-			&flags, &(Clients[ClientSocket].Overlapped), Recv_CallBack);
+			&Flags, &(Clients[ClientSocket].Overlapped), Recv_CallBack);
 	}
-
-	//while (1) {
-	//	// accept() -> 접속한 클라이언트와 통신 가능하도록 새로운 소켓을 만들어 리턴
-	//	AddrLen = sizeof(clientaddr);
-	//	client_sock = accept(ListenSocket, (SOCKADDR*)&clientaddr, &AddrLen);
-	//	if (client_sock == INVALID_SOCKET) {
-	//		err_display("accept()");
-	//		break;
-	//	}
-
-	//	// 접속한 클라이언트 정보 출력
-	//	printf("\n[TCP 서버] 클라이언트 접속: IP 주소=%s, 포트 번호=%d\n",
-	//		inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-
-	//	// 클라이언트와 데이터 통신
-	//	while (1) {
-	//		// 데이터 받기
-	//		Retval = recv(client_sock, CSBuf, MAX_BUFFER, 0);
-	//		if (Retval == SOCKET_ERROR) {
-	//			err_display("recv()");
-	//			break;
-	//		}
-	//		else if (Retval == 0)
-	//			break;
-
-	//		// 데이터 처리
-	//		Process(CSBuf, SCBuf);
-
-	//		// 데이터 보내기
-	//		Retval = send(client_sock, SCBuf, MAX_BUFFER, 0);
-	//		if (Retval == SOCKET_ERROR) {
-	//			err_display("send()");
-	//			break;
-	//		}
-	//		ZeroMemory(SCBuf, MAX_BUFFER);
-	//	}
-
-	//	// closesocket()
-	//	closesocket(client_sock);
-	//	printf("[TCP 서버] 클라이언트 종료: IP 주소=%s, 포트 번호=%d\n",
-	//		inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-	//}
 
 	// closesocket()
 	closesocket(ListenSocket);

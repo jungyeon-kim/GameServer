@@ -5,6 +5,11 @@ using namespace std;
 
 unique_ptr<CGameManager> GameManager{};
 
+void Update(void)
+{
+	GameManager->Update();
+}
+
 void RenderScene(void)
 {
 	GameManager->Render();
@@ -55,6 +60,7 @@ int main(int argc, char **argv)
 	}
 
 	GameManager = make_unique<CGameManager>(ServerIP);
+	//GameManager = make_unique<CGameManager>("127.0.0.1");
 
 	glutDisplayFunc(RenderScene);
 	glutIdleFunc(Idle);

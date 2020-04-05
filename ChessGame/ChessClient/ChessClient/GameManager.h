@@ -5,13 +5,14 @@ class CGameManager
 private:
 	SOCKET Socket{};
 
+	std::map<SOCKET, std::unique_ptr<class CPlayer>> Players{};
 	std::shared_ptr<class CRenderer> Renderer{};
-	std::unique_ptr<class CPlayer> Player{};
 	std::unique_ptr<class CMapTile> MapTile{};
 public:
 	CGameManager(const char* ServerIP);
 	~CGameManager();
 
+	void Update();
 	void Render();
 	void Idle();
 	void MouseInput(int button, int state, int x, int y);
@@ -22,8 +23,8 @@ public:
 	void err_display(const char* Msg);
 
 	void Send(char* Packet);
+	void SendInit();
 	void SendMovement(char Key);
 	void Receive();
-
 };
 

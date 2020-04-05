@@ -7,9 +7,6 @@ using namespace std;
 CPlayer::CPlayer(shared_ptr<class CRenderer> NewRenderer)
 {
 	Renderer = NewRenderer;
-
-	PosX = WndSizeX / 16.0f;
-	PosY = WndSizeY / 16.0f;
 }
 
 CPlayer::~CPlayer()
@@ -33,10 +30,10 @@ float CPlayer::GetPosY() const
 
 void CPlayer::SetPosX(float NewX)
 {
-	if (-WndSizeX / 2.0f < NewX && NewX < WndSizeX / 2.0f) PosX = NewX;
+	PosX = NewX;
 }
 
 void CPlayer::SetPosY(float NewY)
 {
-	if (-WndSizeY / 2.0f < NewY && NewY < WndSizeY / 2.0f) PosY = NewY;
+	PosY = NewY;
 }

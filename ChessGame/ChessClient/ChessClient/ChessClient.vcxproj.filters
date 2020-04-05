@@ -13,20 +13,17 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="소스 파일\0.Manager">
-      <UniqueIdentifier>{6605145b-1f84-4f52-bd14-0e1728379a0c}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="소스 파일\1.Actor">
-      <UniqueIdentifier>{5054a0c6-6b81-4443-8968-f7280b85438c}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="헤더 파일\0.Manager">
-      <UniqueIdentifier>{411145d1-8461-4b41-b5dd-24cb58b8f9ec}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="헤더 파일\1.Actor">
-      <UniqueIdentifier>{a3b1f33b-422c-4b51-bdcc-942d62545d0d}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="GameManager.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="MapTile.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="Player.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
     <ClCompile Include="Renderer.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -36,17 +33,17 @@
     <ClCompile Include="ChessGame.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="GameManager.cpp">
-      <Filter>소스 파일\0.Manager</Filter>
-    </ClCompile>
-    <ClCompile Include="MapTile.cpp">
-      <Filter>소스 파일\1.Actor</Filter>
-    </ClCompile>
-    <ClCompile Include="Player.cpp">
-      <Filter>소스 파일\1.Actor</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="GameManager.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="MapTile.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="Player.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
     <ClInclude Include="Renderer.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
@@ -56,16 +53,7 @@
     <ClInclude Include="targetver.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="GameManager.h">
-      <Filter>헤더 파일\0.Manager</Filter>
-    </ClInclude>
-    <ClInclude Include="MapTile.h">
-      <Filter>헤더 파일\1.Actor</Filter>
-    </ClInclude>
-    <ClInclude Include="Player.h">
-      <Filter>헤더 파일\1.Actor</Filter>
-    </ClInclude>
-    <ClInclude Include="..\Server\Protocol.h">
+    <ClInclude Include="..\..\ChessServer\ChessServer\Protocol.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>
