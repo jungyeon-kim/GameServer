@@ -42,11 +42,11 @@ private:
 
 public:
 	int m_x, m_y;
-	char name[MAX_ID_LEN];
-	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
+	char Name[MAX_ID_LEN];
+	OBJECT(sf::Texture& t, int PosX, int PosY, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
-		m_sprite.setTextureRect(sf::IntRect(x, y, x2, y2));
+		m_sprite.setTextureRect(sf::IntRect(PosX, PosY, x2, y2));
 		m_time_out = high_resolution_clock::now();
 	}
 	OBJECT() {
@@ -62,17 +62,17 @@ public:
 		m_showing = false;
 	}
 
-	void a_move(int x, int y) {
-		m_sprite.setPosition((float)x, (float)y);
+	void a_move(int PosX, int PosY) {
+		m_sprite.setPosition((float)PosX, (float)PosY);
 	}
 
 	void a_draw() {
 		g_window->draw(m_sprite);
 	}
 
-	void move(int x, int y) {
-		m_x = x;
-		m_y = y;
+	void move(int PosX, int PosY) {
+		m_x = PosX;
+		m_y = PosY;
 	}
 	void draw() {
 		if (false == m_showing) return;
@@ -136,60 +136,60 @@ void ProcessPacket(char* ptr)
 	static bool first_time = true;
 	switch (ptr[1])
 	{
-	case S2C_LOGIN_OK:
+	case SC_LOGIN_OK:
 	{
-		sc_packet_login_ok* my_packet = reinterpret_cast<sc_packet_login_ok*>(ptr);
-		g_myid = my_packet->id;
-		avatar.move(my_packet->x, my_packet->y);
-		//g_left_x = my_packet->x - (SCREEN_WIDTH / 2);
-		//g_top_y = my_packet->y - (SCREEN_HEIGHT / 2);
+		SC_Packet_Login_OK* my_packet = reinterpret_cast<SC_Packet_Login_OK*>(ptr);
+		g_myid = my_packet->ID;
+		avatar.move(my_packet->PosX, my_packet->PosY);
+		//g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
+		//g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
 		avatar.show();
 	}
 	break;
 
-	case S2C_ENTER:
+	case SC_ENTER:
 	{
-		sc_packet_enter* my_packet = reinterpret_cast<sc_packet_enter*>(ptr);
-		int id = my_packet->id;
+		SC_Packet_Enter* my_packet = reinterpret_cast<SC_Packet_Enter*>(ptr);
+		int ID = my_packet->ID;
 
-		if (id == g_myid) {
-			avatar.move(my_packet->x, my_packet->y);
-			//g_left_x = my_packet->x - (SCREEN_WIDTH / 2);
-			//g_top_y = my_packet->y - (SCREEN_HEIGHT / 2);
+		if (ID == g_myid) {
+			avatar.move(my_packet->PosX, my_packet->PosY);
+			//g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
+			//g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
 			avatar.show();
 		}
 		else {
-			if (id < NPC_ID_START)
-				npcs[id] = OBJECT{ *pieces, 64, 0, 64, 64 };
+			if (ID < NPC_ID_START)
+				npcs[ID] = OBJECT{ *pieces, 64, 0, 64, 64 };
 			else
-				npcs[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
-			strcpy_s(npcs[id].name, my_packet->name);
-			npcs[id].set_name(my_packet->name);
-			npcs[id].move(my_packet->x, my_packet->y);
-			npcs[id].show();
+				npcs[ID] = OBJECT{ *pieces, 0, 0, 64, 64 };
+			strcpy_s(npcs[ID].Name, my_packet->Name);
+			npcs[ID].set_name(my_packet->Name);
+			npcs[ID].move(my_packet->PosX, my_packet->PosY);
+			npcs[ID].show();
 		}
 	}
 	break;
-	case S2C_MOVE:
+	case SC_MOVE:
 	{
-		sc_packet_move* my_packet = reinterpret_cast<sc_packet_move*>(ptr);
-		int other_id = my_packet->id;
+		SC_Packet_Move* my_packet = reinterpret_cast<SC_Packet_Move*>(ptr);
+		int other_id = my_packet->ID;
 		if (other_id == g_myid) {
-			avatar.move(my_packet->x, my_packet->y);
-			//g_left_x = my_packet->x - (SCREEN_WIDTH / 2);
-			//g_top_y = my_packet->y - (SCREEN_HEIGHT / 2);
+			avatar.move(my_packet->PosX, my_packet->PosY);
+			//g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
+			//g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
 		}
 		else {
 			if (0 != npcs.count(other_id))
-				npcs[other_id].move(my_packet->x, my_packet->y);
+				npcs[other_id].move(my_packet->PosX, my_packet->PosY);
 		}
 	}
 	break;
 
-	case S2C_LEAVE:
+	case SC_LEAVE:
 	{
-		sc_packet_leave* my_packet = reinterpret_cast<sc_packet_leave*>(ptr);
-		int other_id = my_packet->id;
+		SC_Packet_Leave* my_packet = reinterpret_cast<SC_Packet_Leave*>(ptr);
+		int other_id = my_packet->ID;
 		if (other_id == g_myid) {
 			avatar.hide();
 		}
@@ -289,10 +289,10 @@ void send_packet(void* packet)
 
 void send_move_packet(unsigned char dir)
 {
-	cs_packet_move m_packet;
-	m_packet.type = C2S_MOVE;
-	m_packet.size = sizeof(m_packet);
-	m_packet.direction = dir;
+	CS_Packet_Move m_packet;
+	m_packet.Type = CS_MOVE;
+	m_packet.Size = sizeof(m_packet);
+	m_packet.Dir = dir;
 	send_packet(&m_packet);
 }
 
@@ -310,13 +310,13 @@ int main()
 
 	client_initialize();
 
-	cs_packet_login l_packet;
-	l_packet.size = sizeof(l_packet);
-	l_packet.type = C2S_LOGIN;
+	CS_Packet_Login l_packet;
+	l_packet.Size = sizeof(l_packet);
+	l_packet.Type = CS_LOGIN;
 	int t_id = GetCurrentProcessId();
-	sprintf_s(l_packet.name, "P%03d", t_id % 1000);
-	strcpy_s(avatar.name, l_packet.name);
-	avatar.set_name(l_packet.name);
+	sprintf_s(l_packet.Name, "P%03d", t_id % 1000);
+	strcpy_s(avatar.Name, l_packet.Name);
+	avatar.set_name(l_packet.Name);
 	send_packet(&l_packet);
 
 	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH , WINDOW_HEIGHT), "2D CLIENT");
