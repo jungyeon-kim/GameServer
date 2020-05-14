@@ -40,6 +40,9 @@ struct SC_Packet_Move
 	short PosX{}, PosY{};
 };
 
+constexpr unsigned char O_PLAYER{ 0 };
+constexpr unsigned char O_NPC{ 1 };
+
 struct SC_Packet_Enter 
 {
 	char Size{};
