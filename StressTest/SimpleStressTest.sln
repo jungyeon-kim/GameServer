@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.29920.165
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SimpleStressTest", "SimpleStressTest\SimpleStressTest.vcxproj", "{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}.Debug|x64.ActiveCfg = Debug|x64
+		{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}.Debug|x64.Build.0 = Debug|x64
+		{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}.Debug|x86.ActiveCfg = Debug|Win32
+		{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}.Debug|x86.Build.0 = Debug|Win32
+		{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}.Release|x64.ActiveCfg = Release|x64
+		{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}.Release|x64.Build.0 = Release|x64
+		{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}.Release|x86.ActiveCfg = Release|Win32
+		{34DCD0FC-FCC6-4014-BF67-2F4A4882C972}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4F74F584-4580-4A09-8C7C-E429FA6A1AC0}
+	EndGlobalSection
+EndGlobal
