@@ -26,7 +26,7 @@
     <ClInclude Include="NetworkModule.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\IOCPGameServer\IOCPGameServer\protocol.h">
+    <ClInclude Include="..\..\ChessGame_IOCP\IOCPGameServer\IOCPGameServer\protocol.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

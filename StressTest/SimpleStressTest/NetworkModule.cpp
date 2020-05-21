@@ -22,12 +22,12 @@ extern HWND		hWnd;
 const static int MAX_TEST = 10000;
 const static int MAX_CLIENTS = MAX_TEST * 2;
 const static int INVALID_ID = -1;
-const static int MAX_PACKET_SIZE = 255;
+//const static int MAX_PACKET_SIZE = 255;
 const static int MAX_BUFF_SIZE = 255;
 
 #pragma comment (lib, "ws2_32.lib")
 
-#include "..\..\IOCPGameServer\IOCPGameServer\protocol.h"
+#include "../../ChessGame_IOCP/IOCPGameServer/IOCPGameServer/protocol.h"
 
 HANDLE g_hiocp;
 
@@ -54,7 +54,6 @@ struct CLIENT {
 	unsigned char packet_buf[MAX_PACKET_SIZE];
 	int prev_packet_data;
 	int curr_packet_size;
-	int seq_no;
 	high_resolution_clock::time_point last_move_time;
 };
 
@@ -128,17 +127,17 @@ void SendPacket(int cl, void* packet)
 void ProcessPacket(int ci, unsigned char packet[])
 {
 	switch (packet[1]) {
-	case S2C_MOVE: {
-		sc_packet_move* move_packet = reinterpret_cast<sc_packet_move*>(packet);
-		if (move_packet->id < MAX_CLIENTS) {
-			int my_id = client_map[move_packet->id];
+	case SC_MOVE: {
+		SC_Packet_Move* move_packet = reinterpret_cast<SC_Packet_Move*>(packet);
+		if (move_packet->ID < MAX_CLIENTS) {
+			int my_id = client_map[move_packet->ID];
 			if (-1 != my_id) {
-				g_clients[my_id].x = move_packet->x;
-				g_clients[my_id].y = move_packet->y;
+				g_clients[my_id].x = move_packet->PosX;
+				g_clients[my_id].y = move_packet->PosY;
 			}
 			if (ci == my_id) {
-				if (0 != move_packet->move_time) {
-					auto d_ms = duration_cast<milliseconds>(high_resolution_clock::now().time_since_epoch()).count() - move_packet->move_time;
+				if (0 != move_packet->MoveTime) {
+					auto d_ms = duration_cast<milliseconds>(high_resolution_clock::now().time_since_epoch()).count() - move_packet->MoveTime;
 
 					if (global_delay < d_ms) global_delay++;
 					else if (global_delay > d_ms) global_delay--;
@@ -146,19 +145,19 @@ void ProcessPacket(int ci, unsigned char packet[])
 			}
 		}
 	}
-			   break;
-	case S2C_ENTER: break;
-	case S2C_LEAVE: break;
-	case S2C_LOGIN_OK:
+				break;
+	case SC_ENTER: break;
+	case SC_LEAVE: break;
+	case SC_LOGIN_OK:
 	{
 		g_clients[ci].connected = true;
 		active_clients++;
-		sc_packet_login_ok* login_packet = reinterpret_cast<sc_packet_login_ok*>(packet);
+		SC_Packet_Login_OK* login_packet = reinterpret_cast<SC_Packet_Login_OK*>(packet);
 		int my_id = ci;
-		client_map[login_packet->id] = my_id;
-		g_clients[my_id].id = login_packet->id;
-		g_clients[my_id].x = login_packet->x;
-		g_clients[my_id].y = login_packet->y;
+		client_map[login_packet->ID] = my_id;
+		g_clients[my_id].id = login_packet->ID;
+		g_clients[my_id].x = login_packet->PosX;
+		g_clients[my_id].y = login_packet->PosY;
 
 		//cs_packet_teleport t_packet;
 		//t_packet.size = sizeof(t_packet);
@@ -279,7 +278,8 @@ void Adjust_Number_Of_Client()
 		DisconnectClient(client_to_close);
 		client_to_close++;
 		return;
-	} else 
+	}
+	else
 		if (DELAY_LIMIT < t_delay) {
 			delay_multiplier = 10;
 			return;
@@ -309,17 +309,16 @@ void Adjust_Number_Of_Client()
 	g_clients[num_connections].recv_over.wsabuf.buf =
 		reinterpret_cast<CHAR*>(g_clients[num_connections].recv_over.IOCP_buf);
 	g_clients[num_connections].recv_over.wsabuf.len = sizeof(g_clients[num_connections].recv_over.IOCP_buf);
-	g_clients[num_connections].seq_no = 0;
 
 	DWORD recv_flag = 0;
 	CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_clients[num_connections].client_socket), g_hiocp, num_connections, 0);
 
-	cs_packet_login l_packet;
+	CS_Packet_Login l_packet;
 
 	int temp = num_connections;
-	sprintf_s(l_packet.name, "%d", temp);
-	l_packet.size = sizeof(l_packet);
-	l_packet.type = C2S_LOGIN;
+	sprintf_s(l_packet.Name, "%d", temp);
+	l_packet.Size = sizeof(l_packet);
+	l_packet.Type = CS_LOGIN;
 	SendPacket(num_connections, &l_packet);
 
 
@@ -335,6 +334,7 @@ void Adjust_Number_Of_Client()
 	}
 	num_connections++;
 fail_to_connect:
+	return;
 }
 
 void Test_Thread()
@@ -347,16 +347,16 @@ void Test_Thread()
 			if (false == g_clients[i].connected) continue;
 			if (g_clients[i].last_move_time + 1s > high_resolution_clock::now()) continue;
 			g_clients[i].last_move_time = high_resolution_clock::now();
-			cs_packet_move my_packet;
-			my_packet.size = sizeof(my_packet);
-			my_packet.type = C2S_MOVE;
+			CS_Packet_Move my_packet;
+			my_packet.Size = sizeof(my_packet);
+			my_packet.Type = CS_MOVE;
 			switch (rand() % 4) {
-			case 0: my_packet.direction = D_UP; break;
-			case 1: my_packet.direction = D_DOWN; break;
-			case 2: my_packet.direction = D_LEFT; break;
-			case 3: my_packet.direction = D_RIGHT; break;
+			case 0: my_packet.Dir = D_UP; break;
+			case 1: my_packet.Dir = D_DOWN; break;
+			case 2: my_packet.Dir = D_LEFT; break;
+			case 3: my_packet.Dir = D_RIGHT; break;
 			}
-			my_packet.move_time = static_cast<unsigned>(duration_cast<milliseconds>(high_resolution_clock::now().time_since_epoch()).count());
+			my_packet.MoveTime = static_cast<unsigned>(duration_cast<milliseconds>(high_resolution_clock::now().time_since_epoch()).count());
 			SendPacket(i, &my_packet);
 		}
 	}
@@ -411,4 +411,3 @@ void GetPointCloud(int* size, float** points)
 	*size = index;
 	*points = point_cloud;
 }
-

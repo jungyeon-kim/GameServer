@@ -38,6 +38,8 @@ struct Client
 
 	char Name[MAX_ID_LEN + 1]{};
 	short PosX{}, PosY{};
+
+	unsigned MoveTime{};
 };
 
 HANDLE IOCP{};
@@ -108,6 +110,7 @@ void Send_Packet_Move(int UserID, int MovedUserId)
 	Packet.ID = MovedUserId;
 	Packet.PosX = Clients[MovedUserId].PosX;
 	Packet.PosY = Clients[MovedUserId].PosY;
+	Packet.MoveTime = Clients[MovedUserId].MoveTime;
 
 	Send_Packet(UserID, &Packet);
 }
@@ -144,6 +147,8 @@ void ProcessPacket(int UserID, char* Buf)
 	case CS_MOVE:
 	{
 		CS_Packet_Move* Packet{ reinterpret_cast<CS_Packet_Move*>(Buf) };
+
+		Clients[UserID].MoveTime = Packet->MoveTime;
 
 		short& PosX{ Clients[UserID].PosX };
 		short& PosY{ Clients[UserID].PosY };

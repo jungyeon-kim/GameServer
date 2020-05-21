@@ -2,12 +2,12 @@
 
 constexpr int MAX_BUF_SIZE{ 1024 };
 constexpr int MAX_PACKET_SIZE{ 255 };
-constexpr int MAX_USER_COUNT{ 10 };
+constexpr int MAX_USER_COUNT{ 10000 };
 constexpr int MAX_ID_LEN{ 50 };
 constexpr int MAX_STR_LEN{ 255 };
 
-#define WORLD_WIDTH		8
-#define WORLD_HEIGHT	8
+#define WORLD_WIDTH		400
+#define WORLD_HEIGHT	400
 
 #define SERVER_PORT		9000
 
@@ -38,6 +38,7 @@ struct SC_Packet_Move
 	char Type{};
 	int ID{};
 	short PosX{}, PosY{};
+	unsigned MoveTime{};
 };
 
 constexpr unsigned char O_PLAYER{ 0 };
@@ -77,6 +78,7 @@ struct CS_Packet_Move
 	char Size{};
 	char Type{};
 	char Dir{};
+	unsigned MoveTime{};
 };
 
 #pragma pack (pop)

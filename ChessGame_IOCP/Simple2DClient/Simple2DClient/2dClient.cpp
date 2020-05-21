@@ -11,12 +11,12 @@ using namespace chrono;
 
 sf::TcpSocket g_socket;
 
-constexpr auto SCREEN_WIDTH = 8;
-constexpr auto SCREEN_HEIGHT = 8;
+constexpr auto SCREEN_WIDTH = 16;
+constexpr auto SCREEN_HEIGHT = 16;
 
 constexpr auto TILE_WIDTH = 65;
-constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH + 10;   // size of window
-constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH + 10;
+constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;   // size of window
+constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;
 constexpr auto BUF_SIZE = 200;
 constexpr auto MAX_USER = 10;
 
@@ -141,8 +141,8 @@ void ProcessPacket(char* ptr)
 		SC_Packet_Login_OK* my_packet = reinterpret_cast<SC_Packet_Login_OK*>(ptr);
 		g_myid = my_packet->ID;
 		avatar.move(my_packet->PosX, my_packet->PosY);
-		//g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
-		//g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
+		g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
+		g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
 		avatar.show();
 	}
 	break;
@@ -154,8 +154,8 @@ void ProcessPacket(char* ptr)
 
 		if (ID == g_myid) {
 			avatar.move(my_packet->PosX, my_packet->PosY);
-			//g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
-			//g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
+			g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
+			g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
 			avatar.show();
 		}
 		else {
@@ -176,8 +176,8 @@ void ProcessPacket(char* ptr)
 		int other_id = my_packet->ID;
 		if (other_id == g_myid) {
 			avatar.move(my_packet->PosX, my_packet->PosY);
-			//g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
-			//g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
+			g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
+			g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
 		}
 		else {
 			if (0 != npcs.count(other_id))
@@ -257,8 +257,8 @@ void client_main()
 			int tile_x = i + g_left_x;
 			int tile_y = j + g_top_y;
 			if ((tile_x < 0) || (tile_y < 0)) continue;
-			if (((tile_x + tile_y) % 2) == 0) {
-			//if (((tile_x / 3 + tile_y / 3) % 2) == 0) {
+			//if (((tile_x + tile_y) % 2) == 0) {
+			if (((tile_x / 3 + tile_y / 3) % 2) == 0) {
 				white_tile.a_move(TILE_WIDTH * i + 7, TILE_WIDTH * j + 7);
 				white_tile.a_draw();
 			}
@@ -321,6 +321,11 @@ int main()
 
 	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH , WINDOW_HEIGHT), "2D CLIENT");
 	g_window = &window;
+
+	sf::View view = g_window->getView();
+	view.zoom(2.0f);
+	view.move(SCREEN_WIDTH * TILE_WIDTH / 4, SCREEN_HEIGHT * TILE_WIDTH / 4);
+	g_window->setView(view);
 
 	while (window.isOpen())
 	{
