@@ -190,6 +190,7 @@ void ProcessPacket(char* ptr)
 	{
 		SC_Packet_Leave* my_packet = reinterpret_cast<SC_Packet_Leave*>(ptr);
 		int other_id = my_packet->ID;
+
 		if (other_id == g_myid) {
 			avatar.hide();
 		}

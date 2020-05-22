@@ -4,9 +4,11 @@
 #include <iostream>
 #include <WS2tcpip.h>
 #include <MSWSock.h>
+#include <cmath>
 #include <thread>
 #include <mutex>
 #include <vector>
+#include <unordered_set>
 #include "protocol.h"
 
 using namespace std;
@@ -35,6 +37,7 @@ struct Client
 	int PrevRecvSize{};			// 조각난 데이터를 Recv했을 경우 해당 데이터의 사이즈를 저장하는 변수
 	char PacketBuf[MAX_PACKET_SIZE]{};
 	ClientStat Status{};
+	unordered_set<int> ViewList{};
 
 	char Name[MAX_ID_LEN + 1]{};
 	short PosX{}, PosY{};
@@ -133,7 +136,8 @@ void ProcessPacket(int UserID, char* Buf)
 		{
 			if (UserID == i) continue;	// 데드락 & 자신에게 보내는 것 방지
 			Clients[i].Mutex.lock();
-			if (Clients[i].Status == ClientStat::ACTIVE)
+			if (Clients[i].Status == ClientStat::ACTIVE &&
+				Clients[UserID].ViewList.find(Clients[i].ID) != Clients[UserID].ViewList.end())
 			{
 				Send_Packet_Enter(UserID, i);
 				Send_Packet_Enter(i, UserID);
@@ -167,10 +171,31 @@ void ProcessPacket(int UserID, char* Buf)
 
 		for (auto& Client : Clients)
 		{
-			Client.Mutex.lock();
-			if (Client.Status == ClientStat::ACTIVE)
+			lock_guard<mutex> lock{ Client.Mutex };
+
+			// 시야에 들어왔을 때
+			if (Clients[UserID].ViewList.find(Client.ID) == Clients[UserID].ViewList.end() &&
+				abs(Clients[UserID].PosX - Client.PosX) < 6 && abs(Clients[UserID].PosY - Client.PosY) < 6)
+			{
+				Clients[UserID].ViewList.emplace(Client.ID);
+				Client.ViewList.emplace(UserID);
+				Send_Packet_Enter(UserID, Client.ID);
+				Send_Packet_Enter(Client.ID, UserID);
+				continue;
+			}
+			// 시야에 벗어났을 때
+			if (Clients[UserID].ViewList.find(Client.ID) != Clients[UserID].ViewList.end() &&
+				(abs(Clients[UserID].PosX - Client.PosX) >= 6 || abs(Clients[UserID].PosY - Client.PosY) >= 6))
+			{
+				Clients[UserID].ViewList.erase(Client.ID);
+				Client.ViewList.erase(UserID);
+				Send_Packet_Leave(UserID, Client.ID);
+				Send_Packet_Leave(Client.ID, UserID);
+				continue;
+			}
+			if (Client.Status == ClientStat::ACTIVE && 
+				Clients[UserID].ViewList.find(Client.ID) != Clients[UserID].ViewList.end())
 				Send_Packet_Move(Client.ID, UserID);
-			Client.Mutex.unlock();
 		}
 		break;
 	}
@@ -313,7 +338,11 @@ void WorkerThread()
 
 void InitClients()
 {
-	for (int i = 0; i < MAX_USER_COUNT; ++i) Clients[i].ID = i;
+	for (int i = 0; i < MAX_USER_COUNT; ++i)
+	{
+		Clients[i].ID = i;
+		Clients[i].ViewList.emplace(i);
+	}
 }
 
 int main()
