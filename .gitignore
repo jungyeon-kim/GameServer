@@ -46,3 +46,4 @@
 *.res
 *.ipch
 *.opendb
+*.vcxproj.FileListAbsolute.txt

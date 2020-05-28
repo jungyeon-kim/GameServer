@@ -1,17 +1,19 @@
 #pragma comment (lib, "WS2_32.lib")
 #pragma comment (lib, "mswsock.lib")
 
-#include <iostream>
 #include <WS2tcpip.h>
 #include <MSWSock.h>
-#include <cmath>
+#include <iostream>
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <vector>
 #include <unordered_set>
 #include "protocol.h"
 
 using namespace std;
+
+constexpr int VIEW_RANGE{ 6 };
 
 enum class EnumOp { RECV, SEND, ACCEPT };
 enum class ClientStat { FREE, ALLOCATED, ACTIVE };
@@ -36,8 +38,8 @@ struct Client
 	ExOverlapped RecvOver{};	// Recv용 Overlapped구조체 (Send와 달리 하나만 필요)
 	int PrevRecvSize{};			// 조각난 데이터를 Recv했을 경우 해당 데이터의 사이즈를 저장하는 변수
 	char PacketBuf[MAX_PACKET_SIZE]{};
-	ClientStat Status{};
-	unordered_set<int> ViewList{};
+	atomic<ClientStat> Status{};
+	unordered_set<int> ViewList{};	// 시야범위 내에 존재하는 클라이언트를 담기위한 자료구조
 
 	char Name[MAX_ID_LEN + 1]{};
 	short PosX{}, PosY{};
@@ -48,6 +50,17 @@ struct Client
 HANDLE IOCP{};
 SOCKET ListenSocket{};
 Client Clients[MAX_USER_COUNT]{};
+
+void InitClients()
+{
+	for (int i = 0; i < MAX_USER_COUNT; ++i) Clients[i].ID = i;
+}
+
+bool IsNear(int UserID, int OtherObjectID)
+{
+	return abs(Clients[UserID].PosX - Clients[OtherObjectID].PosX) <= VIEW_RANGE &&
+		abs(Clients[UserID].PosY - Clients[OtherObjectID].PosY) <= VIEW_RANGE;
+}
 
 void Send_Packet(int UserID, void* BufPointer)
 {
@@ -90,6 +103,10 @@ void Send_Packet_Enter(int UserID, int OtherObjectID)
 	Packet.PosY = Clients[OtherObjectID].PosY;
 	strcpy_s(Packet.Name, Clients[OtherObjectID].Name);
 
+	Clients[UserID].Mutex.lock();
+	Clients[UserID].ViewList.emplace(OtherObjectID);
+	Clients[UserID].Mutex.unlock();
+
 	Send_Packet(UserID, &Packet);
 }
 
@@ -100,6 +117,10 @@ void Send_Packet_Leave(int UserID, int OtherObjectID)
 	Packet.Size = sizeof(Packet);
 	Packet.Type = SC_LEAVE;
 	Packet.ID = OtherObjectID;
+
+	Clients[UserID].Mutex.lock();
+	Clients[UserID].ViewList.erase(OtherObjectID);
+	Clients[UserID].Mutex.unlock();
 
 	Send_Packet(UserID, &Packet);
 }
@@ -132,20 +153,23 @@ void ProcessPacket(int UserID, char* Buf)
 
 		Send_Packet_Login_Ok(UserID);
 
+		Clients[UserID].Status = ClientStat::ACTIVE;
+		Clients[UserID].Mutex.unlock();
+
 		for (int i = 0; i < MAX_USER_COUNT; ++i)
 		{
 			if (UserID == i) continue;	// 데드락 & 자신에게 보내는 것 방지
-			Clients[i].Mutex.lock();
-			if (Clients[i].Status == ClientStat::ACTIVE &&
-				Clients[UserID].ViewList.find(Clients[i].ID) != Clients[UserID].ViewList.end())
+			if (!IsNear(UserID, i))
 			{
-				Send_Packet_Enter(UserID, i);
-				Send_Packet_Enter(i, UserID);
+				//Clients[i].Mutex.lock();
+				if (Clients[i].Status == ClientStat::ACTIVE)
+				{
+					Send_Packet_Enter(UserID, i);
+					Send_Packet_Enter(i, UserID);
+				}
+				//Clients[i].Mutex.unlock();
 			}
-			Clients[i].Mutex.unlock();
 		}
-		Clients[UserID].Status = ClientStat::ACTIVE;
-		Clients[UserID].Mutex.unlock();
 		break;
 	}
 	case CS_MOVE:
@@ -169,33 +193,65 @@ void ProcessPacket(int UserID, char* Buf)
 			exit(-1);
 		}
 
+		Clients[UserID].Mutex.lock();
+		unordered_set<int> OldViewList{ Clients[UserID].ViewList };
+		Clients[UserID].Mutex.unlock();
+		unordered_set<int> NewViewList{};
+
 		for (auto& Client : Clients)
 		{
-			lock_guard<mutex> lock{ Client.Mutex };
+			if (Client.Status != ClientStat::ACTIVE || Client.ID == UserID) continue;
+			if (IsNear(UserID, Client.ID)) NewViewList.emplace(Client.ID);
+		}
 
-			// 시야에 들어왔을 때
-			if (Clients[UserID].ViewList.find(Client.ID) == Clients[UserID].ViewList.end() &&
-				abs(Clients[UserID].PosX - Client.PosX) < 6 && abs(Clients[UserID].PosY - Client.PosY) < 6)
+		Send_Packet_Move(UserID, UserID);
+
+		for (auto& NewVisibleObject : NewViewList)
+		{
+			if (!OldViewList.count(NewVisibleObject))
 			{
-				Clients[UserID].ViewList.emplace(Client.ID);
-				Client.ViewList.emplace(UserID);
-				Send_Packet_Enter(UserID, Client.ID);
-				Send_Packet_Enter(Client.ID, UserID);
-				continue;
+				Send_Packet_Enter(UserID, NewVisibleObject);
+				Clients[NewVisibleObject].Mutex.lock();
+				if (!Clients[NewVisibleObject].ViewList.count(UserID))
+				{
+					Clients[NewVisibleObject].Mutex.unlock();
+					Send_Packet_Enter(NewVisibleObject, UserID);
+				}
+				else
+				{
+					Clients[NewVisibleObject].Mutex.unlock();
+					Send_Packet_Move(NewVisibleObject, UserID);
+				}
 			}
-			// 시야에 벗어났을 때
-			if (Clients[UserID].ViewList.find(Client.ID) != Clients[UserID].ViewList.end() &&
-				(abs(Clients[UserID].PosX - Client.PosX) >= 6 || abs(Clients[UserID].PosY - Client.PosY) >= 6))
+			else
 			{
-				Clients[UserID].ViewList.erase(Client.ID);
-				Client.ViewList.erase(UserID);
-				Send_Packet_Leave(UserID, Client.ID);
-				Send_Packet_Leave(Client.ID, UserID);
-				continue;
+				Clients[NewVisibleObject].Mutex.lock();
+				if (Clients[NewVisibleObject].ViewList.count(UserID))
+				{
+					Clients[NewVisibleObject].Mutex.unlock();
+					Send_Packet_Move(NewVisibleObject, UserID);
+				}
+				else
+				{
+					Clients[NewVisibleObject].Mutex.unlock();
+					Send_Packet_Enter(NewVisibleObject, UserID);
+				}
 			}
-			if (Client.Status == ClientStat::ACTIVE && 
-				Clients[UserID].ViewList.find(Client.ID) != Clients[UserID].ViewList.end())
-				Send_Packet_Move(Client.ID, UserID);
+		}
+
+		for (auto& OldVisibleObject : OldViewList)
+		{
+			if (!NewViewList.count(OldVisibleObject))
+			{
+				Send_Packet_Leave(UserID, OldVisibleObject);
+				Clients[OldVisibleObject].Mutex.lock();
+				if (Clients[OldVisibleObject].ViewList.count(UserID))
+				{
+					Clients[OldVisibleObject].Mutex.unlock();
+					Send_Packet_Leave(OldVisibleObject, UserID);
+				}
+				else Clients[OldVisibleObject].Mutex.unlock();
+			}
 		}
 		break;
 	}
@@ -241,18 +297,19 @@ void RecvPacketAssemble(int UserID, int RecvByte)
 
 void Disconnect(int UserID)
 {
+	Send_Packet_Leave(UserID, UserID);
+
 	Clients[UserID].Mutex.lock();
 	Clients[UserID].Status = ClientStat::ALLOCATED;
-	Send_Packet_Leave(UserID, UserID);
 	closesocket(Clients[UserID].Socket);
 
 	for (auto& Client : Clients)
 	{
 		if (Client.ID == UserID) continue;	// 데드락 방지
-		Client.Mutex.lock();
+		//Client.Mutex.lock();
 		if (Client.Status == ClientStat::ACTIVE)
 			Send_Packet_Leave(Client.ID, UserID);
-		Client.Mutex.unlock();
+		//Client.Mutex.unlock();
 	}
 	Clients[UserID].Status = ClientStat::FREE;
 	Clients[UserID].Mutex.unlock();
@@ -318,6 +375,7 @@ void WorkerThread()
 				NewClient.RecvOver.Op = EnumOp::RECV;
 				NewClient.RecvOver.WSABuf.buf = NewClient.RecvOver.IOBuf;
 				NewClient.RecvOver.WSABuf.len = MAX_BUF_SIZE;
+				NewClient.ViewList.clear();
 				NewClient.PosX = rand() % WORLD_WIDTH;
 				NewClient.PosY = rand() % WORLD_HEIGHT;
 
@@ -333,15 +391,6 @@ void WorkerThread()
 			break;
 		}
 		}
-	}
-}
-
-void InitClients()
-{
-	for (int i = 0; i < MAX_USER_COUNT; ++i)
-	{
-		Clients[i].ID = i;
-		Clients[i].ViewList.emplace(i);
 	}
 }
 
