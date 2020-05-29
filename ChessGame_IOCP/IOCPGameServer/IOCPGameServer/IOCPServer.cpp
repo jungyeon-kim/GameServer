@@ -159,7 +159,7 @@ void ProcessPacket(int UserID, char* Buf)
 		for (int i = 0; i < MAX_USER_COUNT; ++i)
 		{
 			if (UserID == i) continue;	// 데드락 & 자신에게 보내는 것 방지
-			if (!IsNear(UserID, i))
+			if (IsNear(UserID, i))
 			{
 				//Clients[i].Mutex.lock();
 				if (Clients[i].Status == ClientStat::ACTIVE)
