@@ -1,5 +1,13 @@
 #pragma comment (lib, "WS2_32.lib")
 #pragma comment (lib, "mswsock.lib")
+#pragma comment (lib, "lua53.lib")
+
+extern "C"
+{
+#include "lua.h"
+#include "lauxlib.h"
+#include "lualib.h"
+}
 
 #include <WS2tcpip.h>
 #include <MSWSock.h>
@@ -7,16 +15,20 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <chrono>
+#include <functional>
 #include <vector>
 #include <unordered_set>
+#include <queue>
 #include "protocol.h"
 
 using namespace std;
+using namespace chrono;
 
 constexpr int VIEW_RANGE{ 6 };
 
-enum class EnumOp { RECV, SEND, ACCEPT };
-enum class ClientStat { FREE, ALLOCATED, ACTIVE };
+enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, PLAYER_MOVE };
+enum class ClientStat { FREE, ALLOCATED, ACTIVE, SLEEP };
 
 struct ExOverlapped
 {
@@ -27,6 +39,7 @@ struct ExOverlapped
 	{
 		WSABUF WSABuf{};
 		SOCKET ClientSocket;
+		int PlayerID;
 	};
 };
 
@@ -45,21 +58,115 @@ struct Client
 	short PosX{}, PosY{};
 
 	unsigned MoveTime{};
+	high_resolution_clock::time_point LastMoveTime{};
+
+	mutex LuaMutex{};
+	lua_State* L{};
+};
+
+struct Event
+{
+	int ObjectID{};
+	EnumOp Op{};
+	high_resolution_clock::time_point WakeUpTime{};
+	int TargetID{};
+
+	constexpr bool operator>(const Event& rhs) const
+	{
+		return WakeUpTime > rhs.WakeUpTime;
+	}
 };
 
 HANDLE IOCP{};
 SOCKET ListenSocket{};
-Client Clients[MAX_USER_COUNT]{};
+Client Clients[NPC_ID_START + MAX_NPC_COUNT]{};
+
+priority_queue<Event, vector<Event>, greater<Event>> TimerQueue;
+mutex TimerLock{};
+
+void AddTimerQueue(int ObjectID, EnumOp Op, int Duration)
+{
+	TimerLock.lock();
+	Event Event{ ObjectID, Op, high_resolution_clock::now() + milliseconds{ Duration }, 0 };
+	TimerQueue.push(Event);
+	TimerLock.unlock();
+}
 
 void InitClients()
 {
 	for (int i = 0; i < MAX_USER_COUNT; ++i) Clients[i].ID = i;
 }
 
+int API_GetX(lua_State* L)
+{
+	int ObjectID{ (int)lua_tointeger(L, -1) };
+	lua_pop(L, 2);
+	lua_pushnumber(L, Clients[ObjectID].PosX);
+	return 1;
+}
+
+int API_GetY(lua_State* L)
+{
+	int ObjectID{ (int)lua_tointeger(L, -1) };
+	lua_pop(L, 2);
+	lua_pushnumber(L, Clients[ObjectID].PosY);
+	return 1;
+}
+
+void Send_Packet_Chat(int UserID, int Chatter, char Msg[]);
+int API_SendMsg(lua_State* L)
+{
+	int MyID{ (int)lua_tointeger(L, -3) };
+	int UserID{ (int)lua_tointeger(L, -2) };
+	char* Msg{ (char*)lua_tostring(L, -1) };
+	lua_pop(L, 3);
+	Send_Packet_Chat(UserID, MyID, Msg);
+	return 0;
+}
+
+void InitNPCs()
+{
+	for (int i = NPC_ID_START; i < NPC_ID_START + MAX_NPC_COUNT; ++i)
+	{
+		Clients[i].Socket = 0;
+		Clients[i].ID = i;
+		sprintf_s(Clients[i].Name, "NPC%d", i);
+		Clients[i].Status = ClientStat::SLEEP;
+		Clients[i].PosX = rand() % WORLD_WIDTH;
+		Clients[i].PosY = rand() % WORLD_HEIGHT;
+
+		lua_State* L{ Clients[i].L = luaL_newstate() };
+		luaL_openlibs(L);
+		luaL_loadfile(L, "NPC.LUA");
+		lua_pcall(L, 0, 0, 0);
+		lua_getglobal(L, "SetID");	// 함수를 push
+		lua_pushnumber(L, i);		// SetID함수의 인자 push
+		lua_pcall(L, 1, 0, 0);		// 스택에는 리턴값만 남게됨
+		lua_pop(L, 1);				// 리턴값 pop
+		// lua에 함수 등록
+		lua_register(L, "API_GetX", API_GetX);
+		lua_register(L, "API_GetY", API_GetY);
+		lua_register(L, "API_SendMsg", API_SendMsg);
+
+	}
+}
+
+void ActivateNPC(int NPCID)
+{
+	ClientStat OldStat{ ClientStat::SLEEP };
+	if (atomic_compare_exchange_strong(&Clients[NPCID].Status, &OldStat, ClientStat::ACTIVE))
+		AddTimerQueue(NPCID, EnumOp::RANDOM_MOVE, 1000);
+}
+
 bool IsNear(int UserID, int OtherObjectID)
 {
 	return abs(Clients[UserID].PosX - Clients[OtherObjectID].PosX) <= VIEW_RANGE &&
 		abs(Clients[UserID].PosY - Clients[OtherObjectID].PosY) <= VIEW_RANGE;
+}
+
+bool IsPlayer(int ObjectID)
+{
+	return ObjectID < NPC_ID_START;
 }
 
 void Send_Packet(int UserID, void* BufPointer)
@@ -98,7 +205,7 @@ void Send_Packet_Enter(int UserID, int OtherObjectID)
 	Packet.Size = sizeof(Packet);
 	Packet.Type = SC_ENTER;
 	Packet.ID = OtherObjectID;
-	Packet.ObjectType = O_PLAYER;
+	Packet.ObjectType = O_HUMAN;
 	Packet.PosX = Clients[OtherObjectID].PosX;
 	Packet.PosY = Clients[OtherObjectID].PosY;
 	strcpy_s(Packet.Name, Clients[OtherObjectID].Name);
@@ -121,6 +228,18 @@ void Send_Packet_Leave(int UserID, int OtherObjectID)
 	Clients[UserID].Mutex.lock();
 	Clients[UserID].ViewList.erase(OtherObjectID);
 	Clients[UserID].Mutex.unlock();
+
+	Send_Packet(UserID, &Packet);
+}
+
+void Send_Packet_Chat(int UserID, int Chatter, char Msg[])
+{
+	SC_Packet_Chat Packet{};
+
+	Packet.Size = sizeof(Packet);
+	Packet.Type = SC_CHAT;
+	Packet.ID = Chatter;
+	strcpy_s(Packet.Msg, Msg);
 
 	Send_Packet(UserID, &Packet);
 }
@@ -156,16 +275,17 @@ void ProcessPacket(int UserID, char* Buf)
 		Clients[UserID].Status = ClientStat::ACTIVE;
 		Clients[UserID].Mutex.unlock();
 
-		for (int i = 0; i < MAX_USER_COUNT; ++i)
+		for (auto& Client : Clients)
 		{
-			if (UserID == i) continue;	// 데드락 & 자신에게 보내는 것 방지
-			if (IsNear(UserID, i))
+			if (UserID == Client.ID) continue;	// 데드락 & 자신에게 보내는 것 방지
+			if (IsNear(UserID, Client.ID))
 			{
 				//Clients[i].Mutex.lock();
-				if (Clients[i].Status == ClientStat::ACTIVE)
+				if (Client.Status == ClientStat::SLEEP) ActivateNPC(Client.ID);
+				if (Client.Status == ClientStat::ACTIVE)
 				{
-					Send_Packet_Enter(UserID, i);
-					Send_Packet_Enter(i, UserID);
+					Send_Packet_Enter(UserID, Client.ID);
+					if (IsPlayer(Client.ID)) Send_Packet_Enter(Client.ID, UserID);
 				}
 				//Clients[i].Mutex.unlock();
 			}
@@ -200,17 +320,28 @@ void ProcessPacket(int UserID, char* Buf)
 
 		for (auto& Client : Clients)
 		{
+			if (!IsNear(UserID, Client.ID)) continue;
+			if (Client.Status == ClientStat::SLEEP) ActivateNPC(Client.ID);
 			if (Client.Status != ClientStat::ACTIVE || Client.ID == UserID) continue;
-			if (IsNear(UserID, Client.ID)) NewViewList.emplace(Client.ID);
+			if (!IsPlayer(Client.ID))
+			{
+				ExOverlapped* ExOver{ new ExOverlapped{} };
+				ExOver->Op = EnumOp::PLAYER_MOVE;
+				ExOver->PlayerID = UserID;
+				PostQueuedCompletionStatus(IOCP, 1, Client.ID, &ExOver->Over);
+			}
+			NewViewList.emplace(Client.ID);
 		}
 
 		Send_Packet_Move(UserID, UserID);
 
 		for (auto& NewVisibleObject : NewViewList)
 		{
-			if (!OldViewList.count(NewVisibleObject))
+			if (!OldViewList.count(NewVisibleObject))	// 오브젝트가 새로 시야에 들어왔을 때
 			{
 				Send_Packet_Enter(UserID, NewVisibleObject);
+				if (!IsPlayer(NewVisibleObject)) continue;
+
 				Clients[NewVisibleObject].Mutex.lock();
 				if (!Clients[NewVisibleObject].ViewList.count(UserID))
 				{
@@ -223,8 +354,10 @@ void ProcessPacket(int UserID, char* Buf)
 					Send_Packet_Move(NewVisibleObject, UserID);
 				}
 			}
-			else
+			else										// 오브젝트가 계속 시야에 존재할 때
 			{
+				if (!IsPlayer(NewVisibleObject)) continue;
+
 				Clients[NewVisibleObject].Mutex.lock();
 				if (Clients[NewVisibleObject].ViewList.count(UserID))
 				{
@@ -239,11 +372,13 @@ void ProcessPacket(int UserID, char* Buf)
 			}
 		}
 
-		for (auto& OldVisibleObject : OldViewList)
+		for (auto& OldVisibleObject : OldViewList)		// 오브젝트가 시야에서 사라졌을 때
 		{
 			if (!NewViewList.count(OldVisibleObject))
 			{
 				Send_Packet_Leave(UserID, OldVisibleObject);
+				if (!IsPlayer(OldVisibleObject)) continue;
+
 				Clients[OldVisibleObject].Mutex.lock();
 				if (Clients[OldVisibleObject].ViewList.count(UserID))
 				{
@@ -303,12 +438,12 @@ void Disconnect(int UserID)
 	Clients[UserID].Status = ClientStat::ALLOCATED;
 	closesocket(Clients[UserID].Socket);
 
-	for (auto& Client : Clients)
+	for (int i = 0; i < NPC_ID_START; ++i)
 	{
-		if (Client.ID == UserID) continue;	// 데드락 방지
+		if (Clients[i].ID == UserID) continue;	// 데드락 방지
 		//Client.Mutex.lock();
-		if (Client.Status == ClientStat::ACTIVE)
-			Send_Packet_Leave(Client.ID, UserID);
+		if (Clients[i].Status == ClientStat::ACTIVE)
+			Send_Packet_Leave(Clients[i].ID, UserID);
 		//Client.Mutex.unlock();
 	}
 	Clients[UserID].Status = ClientStat::FREE;
@@ -324,27 +459,27 @@ void WorkerThread()
 		WSAOVERLAPPED* Over{};
 		// 네번째 인자는 완료된 IO 조작이 시작되었을 때 지정된 OVERLAPPED 구조체의 주소를 받는 변수에 대한 포인터
 		GetQueuedCompletionStatus(IOCP, &IOByte, &CompletionKey, &Over, INFINITE);	// 여기서 Blocking
-
+		
 		ExOverlapped* ExOver{ reinterpret_cast<ExOverlapped*>(Over) };
-		int UserID{ static_cast<int>(CompletionKey) };
+		int ObjectID{ static_cast<int>(CompletionKey) };
 
 		switch (ExOver->Op)
 		{
 		case EnumOp::RECV:
 		{
-			if (!IOByte) Disconnect(UserID);		// 받은 데이터가 0Byte라면 해당 클라이언트 종료
+			if (!IOByte) Disconnect(ObjectID);		// 받은 데이터가 0Byte라면 해당 클라이언트 종료
 			else
 			{
-				RecvPacketAssemble(UserID, IOByte);
+				RecvPacketAssemble(ObjectID, IOByte);
 
-				Clients[UserID].RecvOver.Over = {};
+				Clients[ObjectID].RecvOver.Over = {};
 				DWORD Flags{};
-				WSARecv(Clients[UserID].Socket, &Clients[UserID].RecvOver.WSABuf, 1, NULL, &Flags, &Clients[UserID].RecvOver.Over, NULL);
+				WSARecv(Clients[ObjectID].Socket, &Clients[ObjectID].RecvOver.WSABuf, 1, NULL, &Flags, &Clients[ObjectID].RecvOver.Over, NULL);
 			}
 			break;
 		}
 		case EnumOp::SEND:
-			if (!IOByte) Disconnect(UserID);		// 보낸 데이터가 0Byte라면 해당 클라이언트 종료
+			if (!IOByte) Disconnect(ObjectID);		// 보낸 데이터가 0Byte라면 해당 클라이언트 종료
 			delete ExOver;
 			break;
 		case EnumOp::ACCEPT:
@@ -390,6 +525,102 @@ void WorkerThread()
 				sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, NULL, &ExOver->Over);
 			break;
 		}
+		case EnumOp::RANDOM_MOVE:
+		{
+			switch (rand() % 4)
+			{
+			case 0:		if (Clients[ObjectID].PosY > 0) --Clients[ObjectID].PosY;					break;
+			case 1:		if (Clients[ObjectID].PosY < WORLD_HEIGHT - 1) ++Clients[ObjectID].PosY;	break;
+			case 2:		if (Clients[ObjectID].PosX > 0) --Clients[ObjectID].PosX;					break;
+			case 3:		if (Clients[ObjectID].PosX < WORLD_WIDTH - 1) ++Clients[ObjectID].PosX;		break;
+			}
+			for (int PlayerID = 0; PlayerID < NPC_ID_START; ++PlayerID)
+			{
+				if (Clients[PlayerID].Status != ClientStat::ACTIVE) continue;
+
+				if (IsNear(PlayerID, ObjectID))
+				{
+					Clients[PlayerID].Mutex.lock();
+					if (Clients[PlayerID].ViewList.count(PlayerID))
+					{
+						Clients[PlayerID].Mutex.unlock();
+						Send_Packet_Move(PlayerID, ObjectID);
+					}
+					else
+					{
+						Clients[PlayerID].Mutex.unlock();
+						Send_Packet_Enter(PlayerID, ObjectID);
+					}
+				}
+				else
+				{
+					Clients[PlayerID].Mutex.lock();
+					if (Clients[PlayerID].ViewList.count(PlayerID))
+					{
+						Clients[PlayerID].Mutex.unlock();
+						Send_Packet_Leave(PlayerID, ObjectID);
+					}
+					else Clients[PlayerID].Mutex.unlock();
+				}
+			}
+
+			bool Flag{};
+			for (int PlayerID = 0; PlayerID < NPC_ID_START; ++PlayerID)
+				if (IsNear(PlayerID, ObjectID) && Clients[PlayerID].Status == ClientStat::ACTIVE)
+				{
+					Flag = true;
+					break;
+				}
+			if (Flag) AddTimerQueue(ObjectID, ExOver->Op, 1000);
+			else Clients[ObjectID].Status = ClientStat::SLEEP;
+
+			delete ExOver;
+			break;
+		}
+		case EnumOp::PLAYER_MOVE:
+		{
+			Clients[ObjectID].LuaMutex.lock();
+			lua_State* L{ Clients[ObjectID].L };
+			lua_getglobal(L, "EventPlayerMove");
+			lua_pushnumber(L, ExOver->PlayerID);
+			int Error{ lua_pcall(L, 1, 0, 0) };
+			if (Error) cout << lua_tostring(L, -1) << endl;
+			// EventPlayerMove은 리턴값이 없으므로 pop할게 없다. (lua_pcall()에서 모두 pop되기 때문)
+			Clients[ObjectID].LuaMutex.unlock();
+
+			delete ExOver;
+			break;
+		}
+		default:
+			cout << "Unknown EnumOp." << endl;
+			while (true);
+		}
+	}
+}
+
+void TimerThread()
+{
+	while (true)
+	{
+		this_thread::sleep_for(1ms);
+
+		while (true)
+		{
+			TimerLock.lock();
+			if (TimerQueue.empty()) { TimerLock.unlock(); break; }
+			if (TimerQueue.top().WakeUpTime > high_resolution_clock::now()) { TimerLock.unlock(); break; }
+			Event Event{ TimerQueue.top() };
+			TimerQueue.pop();
+			TimerLock.unlock();
+
+			switch (Event.Op)
+			{
+			case EnumOp::RANDOM_MOVE:
+				ExOverlapped* ExOver{ new ExOverlapped{} };
+				ExOver->Op = Event.Op;
+				PostQueuedCompletionStatus(IOCP, 1, Event.ObjectID, &ExOver->Over);
+				break;
+			}
 		}
 	}
 }
@@ -398,6 +629,10 @@ int main()
 {
 	WSADATA WSAData{};
 	WSAStartup(MAKEWORD(2, 2), &WSAData);
+
+	cout << "Initializing NPC..." << endl;
+	InitNPCs();
+	cout << "NPC is Initialized!" << endl;
 
 	ListenSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 
@@ -421,8 +656,12 @@ int main()
 	AcceptEx(ListenSocket, ClientSocket, AcceptOver.IOBuf, NULL, 
 		sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, NULL, &AcceptOver.Over);
 
-	vector<thread> WorkerThreads{};
+	vector<thread> Workers{};
 	// 현재 PC의 코어가 6개이므로 6개의 스레드 생성
-	for (int i = 0; i < 6; ++i) WorkerThreads.emplace_back(WorkerThread);
-	for (auto& Thread : WorkerThreads) Thread.join();
+	for (int i = 0; i < 6; ++i) Workers.emplace_back(WorkerThread);
+
+	thread Timer{ TimerThread };
+
+	for (auto& Worker : Workers) Worker.join();
+	Timer.join();
 }

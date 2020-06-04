@@ -18,10 +18,7 @@ constexpr auto TILE_WIDTH = 65;
 constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;   // size of window
 constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;
 constexpr auto BUF_SIZE = 200;
-constexpr auto MAX_USER = 10;
-
-// 추후 확장용.
-int NPC_ID_START = 10000;
+constexpr auto MAX_USER = NPC_ID_START;
 
 int g_left_x;
 int g_top_y;
@@ -83,7 +80,7 @@ public:
 		m_name.setPosition(rx - 10, ry - 10);
 		g_window->draw(m_name);
 		if (high_resolution_clock::now() < m_time_out) {
-			m_text.setPosition(rx - 10, ry - 10);
+			m_text.setPosition(rx - 10, ry + 15);
 			g_window->draw(m_text);
 		}
 	}
@@ -198,6 +195,14 @@ void ProcessPacket(char* ptr)
 			if (0 != npcs.count(other_id))
 				npcs[other_id].hide();
 		}
+	}
+	break;
+	case SC_CHAT:
+	{
+		SC_Packet_Chat* my_packet = reinterpret_cast<SC_Packet_Chat*>(ptr);
+		int other_id{ my_packet->ID };
+
+		if (npcs.count(other_id)) npcs[other_id].add_chat(my_packet->Msg);
 	}
 	break;
 	default:

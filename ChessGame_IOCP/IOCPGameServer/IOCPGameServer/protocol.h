@@ -2,22 +2,25 @@
 
 constexpr int MAX_BUF_SIZE{ 1024 };
 constexpr int MAX_PACKET_SIZE{ 255 };
-constexpr int MAX_USER_COUNT{ 10000 };
+constexpr int MAX_USER_COUNT{ 20000 };
+constexpr int MAX_NPC_COUNT{ 2000 };
 constexpr int MAX_ID_LEN{ 50 };
-constexpr int MAX_STR_LEN{ 255 };
+constexpr int MAX_STR_LEN{ 50 };
+constexpr int NPC_ID_START{ MAX_USER_COUNT };
 
 #define WORLD_WIDTH		400
 #define WORLD_HEIGHT	400
 
 #define SERVER_PORT		9000
 
-#define CS_LOGIN		1
-#define CS_MOVE			2
-
 #define SC_LOGIN_OK		1
 #define SC_MOVE			2
 #define SC_ENTER		3
 #define SC_LEAVE		4
+#define SC_CHAT			5
+
+#define CS_LOGIN		1
+#define CS_MOVE			2
 
 #pragma pack(push ,1)
 
@@ -41,8 +44,9 @@ struct SC_Packet_Move
 	unsigned MoveTime{};
 };
 
-constexpr unsigned char O_PLAYER{ 0 };
-constexpr unsigned char O_NPC{ 1 };
+constexpr unsigned char O_HUMAN{ 0 };
+constexpr unsigned char O_ELF{ 1 };
+constexpr unsigned char O_ORC{ 2 };
 
 struct SC_Packet_Enter 
 {
@@ -59,6 +63,14 @@ struct SC_Packet_Leave
 	char Size{};
 	char Type{};
 	int ID{};
+};
+
+struct SC_Packet_Chat
+{
+	char Size{};
+	char Type{};
+	int ID{};
+	char Msg[MAX_STR_LEN]{};
 };
 
 struct CS_Packet_Login 

@@ -21,4 +21,5 @@
 	(socket, hIOCP, key, 0):				세번째 인자는 소켓에 사용할 고유 키값 (네번째 인자는 무시)
 	GetQueuedCompletionStatus():			1. 해당 스레드를 IOCP 스레드풀에 등록하고 Block
 											2. 완료된 IO 작업의 결과를 넘겨줌
+	PostQueuedCompletionStatus():			I/O Queue에 패킷을 추가
 */

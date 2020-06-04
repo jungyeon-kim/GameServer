@@ -138,10 +138,21 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="lauxlib.h" />
+    <ClInclude Include="lua.h" />
+    <ClInclude Include="lua.hpp" />
+    <ClInclude Include="luaconf.h" />
+    <ClInclude Include="lualib.h" />
     <ClInclude Include="protocol.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="IOCPServer.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="NPC.LUA" />
+  </ItemGroup>
+  <ItemGroup>
+    <Library Include="lua53.lib" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
