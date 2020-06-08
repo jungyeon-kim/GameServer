@@ -100,7 +100,6 @@ void InitClients()
 int API_GetX(lua_State* L)
 {
 	int ObjectID{ (int)lua_tointeger(L, -1) };
-	lua_pop(L, 2);
 	lua_pushnumber(L, Clients[ObjectID].PosX);
 	return 1;
 }
@@ -108,7 +107,6 @@ int API_GetX(lua_State* L)
 int API_GetY(lua_State* L)
 {
 	int ObjectID{ (int)lua_tointeger(L, -1) };
-	lua_pop(L, 2);
 	lua_pushnumber(L, Clients[ObjectID].PosY);
 	return 1;
 }
@@ -119,7 +117,6 @@ int API_SendMsg(lua_State* L)
 	int MyID{ (int)lua_tointeger(L, -3) };
 	int UserID{ (int)lua_tointeger(L, -2) };
 	char* Msg{ (char*)lua_tostring(L, -1) };
-	lua_pop(L, 3);
 	Send_Packet_Chat(UserID, MyID, Msg);
 	return 0;
 }
@@ -541,7 +538,7 @@ void WorkerThread()
 				if (IsNear(PlayerID, ObjectID))
 				{
 					Clients[PlayerID].Mutex.lock();
-					if (Clients[PlayerID].ViewList.count(PlayerID))
+					if (Clients[PlayerID].ViewList.count(ObjectID))
 					{
 						Clients[PlayerID].Mutex.unlock();
 						Send_Packet_Move(PlayerID, ObjectID);
@@ -555,7 +552,7 @@ void WorkerThread()
 				else
 				{
 					Clients[PlayerID].Mutex.lock();
-					if (Clients[PlayerID].ViewList.count(PlayerID))
+					if (Clients[PlayerID].ViewList.count(ObjectID))
 					{
 						Clients[PlayerID].Mutex.unlock();
 						Send_Packet_Leave(PlayerID, ObjectID);
@@ -581,7 +578,7 @@ void WorkerThread()
 		{
 			Clients[ObjectID].LuaMutex.lock();
 			lua_State* L{ Clients[ObjectID].L };
-			lua_getglobal(L, "EventPlayerMove");
+			lua_getglobal(L, "BeginOverlap");
 			lua_pushnumber(L, ExOver->PlayerID);
 			int Error{ lua_pcall(L, 1, 0, 0) };
 			if (Error) cout << lua_tostring(L, -1) << endl;
