@@ -138,6 +138,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="DBHandler.h" />
+    <ClInclude Include="IOCPServer.h" />
     <ClInclude Include="lauxlib.h" />
     <ClInclude Include="lua.h" />
     <ClInclude Include="lua.hpp" />
@@ -146,6 +148,7 @@
     <ClInclude Include="protocol.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="DBHandler.cpp" />
     <ClCompile Include="IOCPServer.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -250,7 +250,8 @@ void client_main()
 
 	if (recv_result == sf::Socket::Disconnected)
 	{
-		wcout << L"서버 접속 종료.";
+		wcout << L"서버 접속이 종료되었거나 유효하지 않은 ID입니다." << endl;
+		system("pause");
 		g_window->close();
 	}
 
@@ -316,11 +317,17 @@ int main()
 
 	client_initialize();
 
+	// ID 입력
+	char UserID[MAX_ID_LEN]{};
+	cout << "input ID: ";
+	cin >> UserID;
+
 	CS_Packet_Login l_packet;
 	l_packet.Size = sizeof(l_packet);
 	l_packet.Type = CS_LOGIN;
-	int t_id = GetCurrentProcessId();
-	sprintf_s(l_packet.Name, "P%03d", t_id % 1000);
+	memcpy(l_packet.Name, UserID, sizeof(UserID));
+	//int t_id = GetCurrentProcessId();
+	//sprintf_s(l_packet.Name, "P%03d", t_id % 1000);
 	strcpy_s(avatar.Name, l_packet.Name);
 	avatar.set_name(l_packet.Name);
 	send_packet(&l_packet);
