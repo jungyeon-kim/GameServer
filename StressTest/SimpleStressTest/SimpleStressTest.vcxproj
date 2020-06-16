@@ -151,7 +151,7 @@
     <ClCompile Include="NetworkModule.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\ChessGame_IOCP\IOCPGameServer\IOCPGameServer\protocol.h" />
+    <ClInclude Include="..\..\MMO_RPG_ProtoType\IOCPGameServer\IOCPGameServer\protocol.h" />
     <ClInclude Include="NetworkModule.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

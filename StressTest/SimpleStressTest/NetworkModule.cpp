@@ -27,7 +27,7 @@ const static int MAX_BUFF_SIZE = 255;
 
 #pragma comment (lib, "ws2_32.lib")
 
-#include "../../ChessGame_IOCP/IOCPGameServer/IOCPGameServer/protocol.h"
+#include "../../MMO_RPG_ProtoType/IOCPGameServer/IOCPGameServer/protocol.h"
 
 HANDLE g_hiocp;
 
@@ -127,6 +127,10 @@ void SendPacket(int cl, void* packet)
 void ProcessPacket(int ci, unsigned char packet[])
 {
 	switch (packet[1]) {
+	case SC_LOG: break;
+	case SC_ENTER: break;
+	case SC_LEAVE: break;
+	case SC_CHAT: break;
 	case SC_MOVE: {
 		SC_Packet_Move* move_packet = reinterpret_cast<SC_Packet_Move*>(packet);
 		if (move_packet->ID < MAX_CLIENTS) {
@@ -146,8 +150,6 @@ void ProcessPacket(int ci, unsigned char packet[])
 		}
 	}
 				break;
-	case SC_ENTER: break;
-	case SC_LEAVE: break;
 	case SC_LOGIN_OK:
 	{
 		g_clients[ci].connected = true;
@@ -313,13 +315,12 @@ void Adjust_Number_Of_Client()
 	DWORD recv_flag = 0;
 	CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_clients[num_connections].client_socket), g_hiocp, num_connections, 0);
 
-	CS_Packet_Login l_packet;
-
-	int temp = num_connections;
-	sprintf_s(l_packet.Name, "%d", temp);
-	l_packet.Size = sizeof(l_packet);
-	l_packet.Type = CS_LOGIN;
-	SendPacket(num_connections, &l_packet);
+	CS_Packet_Login Packet;
+	Packet.Size = sizeof(Packet);
+	Packet.Type = CS_LOGIN;
+	strcpy_s(Packet.Name, "adminKJY");
+	strcpy_s(Packet.Password, "123");
+	SendPacket(num_connections, &Packet);
 
 
 	int ret = WSARecv(g_clients[num_connections].client_socket, &g_clients[num_connections].recv_over.wsabuf, 1,
