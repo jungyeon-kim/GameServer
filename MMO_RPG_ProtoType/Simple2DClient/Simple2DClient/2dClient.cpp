@@ -12,12 +12,12 @@ using namespace chrono;
 
 sf::TcpSocket g_socket;
 
-constexpr auto SCREEN_WIDTH = 16;
-constexpr auto SCREEN_HEIGHT = 16;
+constexpr auto SCREEN_WIDTH = 10;
+constexpr auto SCREEN_HEIGHT = 10;
 
 constexpr auto TILE_WIDTH = 65;
-constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;   // size of window
-constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;
+constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH + 10;   // size of window
+constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH + 10;
 constexpr auto BUF_SIZE = 200;
 constexpr auto MAX_USER = NPC_ID_START;
 
@@ -78,7 +78,7 @@ public:
 		float ry = (m_y - g_top_y) * 65.0f + 8;
 		m_sprite.setPosition(rx, ry);
 		g_window->draw(m_sprite);
-		m_name.setPosition(rx - 10, ry - 10);
+		m_name.setPosition(rx - 10, ry - 30);
 		g_window->draw(m_name);
 		if (high_resolution_clock::now() < m_time_out) {
 			m_text.setPosition(rx - 10, ry + 15);
@@ -88,13 +88,17 @@ public:
 	void set_name(char str[]) {
 		m_name.setFont(g_font);
 		m_name.setString(str);
-		m_name.setFillColor(sf::Color(255, 255, 0));
+		m_name.setFillColor(sf::Color(255, 255, 255));
 		m_name.setStyle(sf::Text::Bold);
 	}
 	void add_chat(char chat[]) {
 		m_text.setFont(g_font);
 		m_text.setString(chat);
 		m_time_out = high_resolution_clock::now() + 1s;
+	}
+	void set_texture(sf::Texture& t, int PosX, int PosY, int x2, int y2) {
+		m_sprite.setTexture(t);
+		m_sprite.setTextureRect(sf::IntRect(PosX, PosY, x2, y2));
 	}
 };
 
@@ -105,28 +109,31 @@ OBJECT white_tile;
 OBJECT black_tile;
 
 sf::Texture* board;
-sf::Texture* pieces;
+sf::Texture* player;
+sf::Texture* wolf;
 
 void client_initialize()
 {
 	board = new sf::Texture;
-	pieces = new sf::Texture;
+	player = new sf::Texture;
+	wolf = new sf::Texture;
 	if (false == g_font.loadFromFile("cour.ttf")) {
 		cout << "Font Loading Error!\n";
 		while (true);
 	}
-	board->loadFromFile("chessmap.bmp");
-	pieces->loadFromFile("chess2.png");
+	board->loadFromFile("BG_Grass.png");
+	player->loadFromFile("Player.png");
+	wolf->loadFromFile("Wolf.png");
 	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
-	avatar = OBJECT{ *pieces, 128, 0, 64, 64 };
+	avatar = OBJECT{ *player, 0, 0, 64, 64 };
 	avatar.move(4, 4);
 }
 
 void client_finish()
 {
 	delete board;
-	delete pieces;
+	delete wolf;
 }
 
 void ProcessPacket(char* ptr)
@@ -164,9 +171,9 @@ void ProcessPacket(char* ptr)
 		}
 		else {
 			if (ID < NPC_ID_START)
-				npcs[ID] = OBJECT{ *pieces, 64, 0, 64, 64 };
+				npcs[ID] = OBJECT{ *wolf, 64, 0, 64, 64 };
 			else
-				npcs[ID] = OBJECT{ *pieces, 0, 0, 64, 64 };
+				npcs[ID] = OBJECT{ *wolf, 0, 0, 64, 64 };
 			strcpy_s(npcs[ID].Name, my_packet->Name);
 			npcs[ID].set_name(my_packet->Name);
 			npcs[ID].move(my_packet->PosX, my_packet->PosY);
@@ -402,8 +409,8 @@ int main()
 	g_window = &window;
 
 	sf::View view = g_window->getView();
-	view.zoom(2.0f);
-	view.move(SCREEN_WIDTH * TILE_WIDTH / 4, SCREEN_HEIGHT * TILE_WIDTH / 4);
+	//view.zoom(2.0f);
+	//view.move(SCREEN_WIDTH * TILE_WIDTH / 4, SCREEN_HEIGHT * TILE_WIDTH / 4);
 	g_window->setView(view);
 
 	while (window.isOpen())
@@ -427,6 +434,10 @@ int main()
 					break;
 				case sf::Keyboard::Down:
 					send_move_packet(D_DOWN);
+					break;
+				case sf::Keyboard::Space:
+					avatar.set_texture(*player, 256, 0, 64, 64);
+					//send_attack_packet();
 					break;
 				case sf::Keyboard::Escape:
 					window.close();

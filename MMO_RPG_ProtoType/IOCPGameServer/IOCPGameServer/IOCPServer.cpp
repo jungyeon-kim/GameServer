@@ -11,7 +11,7 @@ void InitNPCs()
     {
         Clients[i].Socket = 0;
         Clients[i].ID = i;
-        sprintf_s(Clients[i].Name, "NPC%d", i);
+        sprintf_s(Clients[i].Name, "NPC%d", i - NPC_ID_START);
         Clients[i].Status = ClientStat::SLEEP;
         Clients[i].PosX = rand() % WORLD_WIDTH;
         Clients[i].PosY = rand() % WORLD_HEIGHT;

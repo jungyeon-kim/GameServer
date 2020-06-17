@@ -3,13 +3,13 @@
 constexpr int MAX_BUF_SIZE{ 1024 };
 constexpr int MAX_PACKET_SIZE{ 255 };
 constexpr int MAX_USER_COUNT{ 20000 };
-constexpr int MAX_NPC_COUNT{ 2000 };
+constexpr int MAX_NPC_COUNT{ 50000 };
 constexpr int MAX_ID_LEN{ 50 };
 constexpr int MAX_STR_LEN{ 50 };
 constexpr int NPC_ID_START{ MAX_USER_COUNT };
 
-#define WORLD_WIDTH		400
-#define WORLD_HEIGHT	400
+#define WORLD_WIDTH		2000
+#define WORLD_HEIGHT	2000
 
 #define SERVER_PORT		9000
 

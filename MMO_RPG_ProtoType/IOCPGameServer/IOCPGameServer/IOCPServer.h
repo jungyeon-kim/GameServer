@@ -28,7 +28,7 @@ extern "C"
 using namespace std;
 using namespace chrono;
 
-constexpr int VIEW_RANGE{ 6 };
+constexpr int VIEW_RANGE{ 3 };
 
 enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, PLAYER_MOVE };
 enum class ClientStat { FREE, ALLOCATED, ACTIVE, SLEEP };
