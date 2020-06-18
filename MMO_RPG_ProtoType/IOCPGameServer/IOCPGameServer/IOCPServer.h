@@ -28,7 +28,7 @@ extern "C"
 using namespace std;
 using namespace chrono;
 
-constexpr int VIEW_RANGE{ 3 };
+constexpr int VIEW_RANGE{ 8 };
 
 enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, PLAYER_MOVE };
 enum class ClientStat { FREE, ALLOCATED, ACTIVE, SLEEP };
@@ -108,6 +108,7 @@ void Send_Packet_Enter(int UserID, int OtherObjectID);
 void Send_Packet_Leave(int UserID, int OtherObjectID);
 void Send_Packet_Chat(int UserID, int Chatter, char Msg[]);
 void Send_Packet_Move(int UserID, int MovedUserId);
+void Send_Packet_Attack(int UserID, int OtherUserID, char Type);
 void RecvPacketAssemble(int UserID, int RecvByte);
 
 void ProcessPacket(int UserID, char* Buf);

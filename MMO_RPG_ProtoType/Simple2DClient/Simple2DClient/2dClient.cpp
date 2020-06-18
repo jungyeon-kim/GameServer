@@ -12,12 +12,12 @@ using namespace chrono;
 
 sf::TcpSocket g_socket;
 
-constexpr auto SCREEN_WIDTH = 10;
-constexpr auto SCREEN_HEIGHT = 10;
+constexpr auto SCREEN_WIDTH = 20;
+constexpr auto SCREEN_HEIGHT = 20;
 
 constexpr auto TILE_WIDTH = 65;
-constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH + 10;   // size of window
-constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH + 10;
+constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;   // size of window
+constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;
 constexpr auto BUF_SIZE = 200;
 constexpr auto MAX_USER = NPC_ID_START;
 
@@ -40,6 +40,8 @@ private:
 
 public:
 	int m_x, m_y;
+	bool isAttacking{};
+
 	char Name[MAX_ID_LEN];
 	OBJECT(sf::Texture& t, int PosX, int PosY, int x2, int y2) {
 		m_showing = false;
@@ -171,7 +173,7 @@ void ProcessPacket(char* ptr)
 		}
 		else {
 			if (ID < NPC_ID_START)
-				npcs[ID] = OBJECT{ *wolf, 64, 0, 64, 64 };
+				npcs[ID] = OBJECT{ *player, 64, 0, 64, 64 };
 			else
 				npcs[ID] = OBJECT{ *wolf, 0, 0, 64, 64 };
 			strcpy_s(npcs[ID].Name, my_packet->Name);
@@ -219,6 +221,22 @@ void ProcessPacket(char* ptr)
 		if (npcs.count(other_id)) npcs[other_id].add_chat(my_packet->Msg);
 	}
 	break;
+	case SC_ATTACK_START:
+	{
+		SC_Packet_Attack* my_packet = reinterpret_cast<SC_Packet_Attack*>(ptr);
+		int other_id{ my_packet->ID };
+
+		npcs[other_id].set_texture(*player, 384, 0, 64, 64);
+	}
+		break;
+	case SC_ATTACK_END:
+	{
+		SC_Packet_Attack* my_packet = reinterpret_cast<SC_Packet_Attack*>(ptr);
+		int other_id{ my_packet->ID };
+
+		npcs[other_id].set_texture(*player, 0, 0, 64, 64);
+	}
+		break;
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 
@@ -315,6 +333,13 @@ void send_move_packet(unsigned char dir)
 	send_packet(&m_packet);
 }
 
+void send_attack_packet(char Type)
+{
+	CS_Packet_Attack m_packet;
+	m_packet.Type = Type;
+	m_packet.Size = sizeof(m_packet);
+	send_packet(&m_packet);
+}
 
 int main()
 {
@@ -355,7 +380,7 @@ int main()
 		{
 		case 1:
 		{
-			CS_Packet_SignUp Packet;
+			CS_Packet_Login Packet;
 			Packet.Size = sizeof(Packet);
 			Packet.Type = CS_SIGNUP;
 			memcpy(Packet.Name, UserID, sizeof(UserID));
@@ -372,7 +397,7 @@ int main()
 		}
 		case 2:
 		{
-			CS_Packet_SignOut Packet;
+			CS_Packet_Login Packet;
 			Packet.Size = sizeof(Packet);
 			Packet.Type = CS_SIGNOUT;
 			memcpy(Packet.Name, UserID, sizeof(UserID));
@@ -409,8 +434,8 @@ int main()
 	g_window = &window;
 
 	sf::View view = g_window->getView();
-	//view.zoom(2.0f);
-	//view.move(SCREEN_WIDTH * TILE_WIDTH / 4, SCREEN_HEIGHT * TILE_WIDTH / 4);
+	view.zoom(2.0f);
+	view.move(SCREEN_WIDTH * TILE_WIDTH / 4, SCREEN_HEIGHT * TILE_WIDTH / 4);
 	g_window->setView(view);
 
 	while (window.isOpen())
@@ -420,6 +445,13 @@ int main()
 		{
 			if (event.type == sf::Event::Closed)
 				window.close();
+			if (event.type == sf::Event::KeyReleased)
+				if (event.key.code)
+				{
+					avatar.set_texture(*player, 0, 0, 64, 64);
+					send_attack_packet(CS_ATTACK_END);
+					avatar.isAttacking = false;
+				}
 			if (event.type == sf::Event::KeyPressed) {
 				int p_type = -1;
 				switch (event.key.code) {
@@ -436,8 +468,12 @@ int main()
 					send_move_packet(D_DOWN);
 					break;
 				case sf::Keyboard::Space:
-					avatar.set_texture(*player, 256, 0, 64, 64);
-					//send_attack_packet();
+					if (!avatar.isAttacking)
+					{
+						avatar.set_texture(*player, 384, 0, 64, 64);
+						send_attack_packet(CS_ATTACK_START);
+						avatar.isAttacking = true;
+					}
 					break;
 				case sf::Keyboard::Escape:
 					window.close();

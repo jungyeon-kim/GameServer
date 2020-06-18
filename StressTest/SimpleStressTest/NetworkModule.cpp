@@ -167,6 +167,8 @@ void ProcessPacket(int ci, unsigned char packet[])
 		//SendPacket(my_id, &t_packet);
 	}
 	break;
+	case SC_ATTACK_START: break;
+	case SC_ATTACK_END: break;
 	default: MessageBox(hWnd, L"Unknown Packet Type", L"ERROR", 0);
 		while (true);
 	}

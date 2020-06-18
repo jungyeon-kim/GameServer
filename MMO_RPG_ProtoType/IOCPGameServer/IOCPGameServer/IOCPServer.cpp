@@ -152,7 +152,7 @@ void Send_Packet_Enter(int UserID, int OtherObjectID)
     Packet.Size = sizeof(Packet);
     Packet.Type = SC_ENTER;
     Packet.ID = OtherObjectID;
-    Packet.ObjectType = O_HUMAN;
+    Packet.ObjectType = O_PLAYER;
     Packet.PosX = Clients[OtherObjectID].PosX;
     Packet.PosY = Clients[OtherObjectID].PosY;
     strcpy_s(Packet.Name, Clients[OtherObjectID].Name);
@@ -205,6 +205,17 @@ void Send_Packet_Move(int UserID, int MovedUserId)
     Send_Packet(UserID, &Packet);
 }
 
+void Send_Packet_Attack(int UserID, int OtherUserID, char Type)
+{
+    SC_Packet_Attack Packet{};
+
+    Packet.Size = sizeof(Packet);
+    Packet.Type = Type;
+    Packet.ID = OtherUserID;
+
+    Send_Packet(UserID, &Packet);
+}
+
 void RecvPacketAssemble(int UserID, int RecvByte)
 {
     Client& Client{ Clients[UserID] };
@@ -244,7 +255,7 @@ void ProcessPacket(int UserID, char* Buf)
     {
     case CS_SIGNUP:
     {
-        CS_Packet_SignUp* Packet{ reinterpret_cast<CS_Packet_SignUp*>(Buf) };
+        CS_Packet_Login* Packet{ reinterpret_cast<CS_Packet_Login*>(Buf) };
         bool IsValid{ DBHandler.SignUp(Packet->Name, Packet->Password) };
 
         if (IsValid)
@@ -261,7 +272,7 @@ void ProcessPacket(int UserID, char* Buf)
     }
     case CS_SIGNOUT:
     {
-        CS_Packet_SignOut* Packet{ reinterpret_cast<CS_Packet_SignOut*>(Buf) };
+        CS_Packet_Login* Packet{ reinterpret_cast<CS_Packet_Login*>(Buf) };
         bool IsValid{ DBHandler.SignOut(Packet->Name, Packet->Password) };
 
         if (IsValid)
@@ -363,7 +374,8 @@ void ProcessPacket(int UserID, char* Buf)
 
         for (auto& NewVisibleObject : NewViewList)
         {
-            if (!OldViewList.count(NewVisibleObject))   // 오브젝트가 새로 시야에 들어왔을 때
+            // 오브젝트가 새로 시야에 들어왔을 때
+            if (!OldViewList.count(NewVisibleObject))
             {
                 Send_Packet_Enter(UserID, NewVisibleObject);
                 if (!IsPlayer(NewVisibleObject)) continue;
@@ -380,7 +392,8 @@ void ProcessPacket(int UserID, char* Buf)
                     Send_Packet_Move(NewVisibleObject, UserID);
                 }
             }
-            else                              // 오브젝트가 계속 시야에 존재할 때
+            // 오브젝트가 계속 시야에 존재할 때
+            else
             {
                 if (!IsPlayer(NewVisibleObject)) continue;
 
@@ -398,7 +411,8 @@ void ProcessPacket(int UserID, char* Buf)
             }
         }
 
-        for (auto& OldVisibleObject : OldViewList)      // 오브젝트가 시야에서 사라졌을 때
+        // 오브젝트가 시야에서 사라졌을 때
+        for (auto& OldVisibleObject : OldViewList)
         {
             if (!NewViewList.count(OldVisibleObject))
             {
@@ -413,6 +427,32 @@ void ProcessPacket(int UserID, char* Buf)
                 }
                 else Clients[OldVisibleObject].Mutex.unlock();
             }
+        }
+        break;
+    }
+    case CS_ATTACK_START:
+    {
+        Clients[UserID].Mutex.lock();
+        unordered_set<int> ViewList{ Clients[UserID].ViewList };
+        Clients[UserID].Mutex.unlock();
+
+        for (auto& VisibleObject : ViewList)
+        {
+            if (!IsPlayer(VisibleObject)) continue;
+            Send_Packet_Attack(VisibleObject, UserID, CS_ATTACK_START);
+        }
+        break;
+    }
+    case CS_ATTACK_END:
+    {
+        Clients[UserID].Mutex.lock();
+        unordered_set<int> ViewList{ Clients[UserID].ViewList };
+        Clients[UserID].Mutex.unlock();
+
+        for (auto& VisibleObject : ViewList)
+        {
+            if (!IsPlayer(VisibleObject)) continue;
+            Send_Packet_Attack(VisibleObject, UserID, CS_ATTACK_END);
         }
         break;
     }
