@@ -19,6 +19,7 @@ extern "C"
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <array>
 #include <vector>
 #include <unordered_set>
 #include <queue>
@@ -28,7 +29,8 @@ extern "C"
 using namespace std;
 using namespace chrono;
 
-constexpr int VIEW_RANGE{ 8 };
+constexpr int VIEW_RANGE{ 8 }; 
+constexpr int NumOfSector{ (WORLD_WIDTH / SECTOR_WIDTH) * (WORLD_HEIGHT / SECTOR_HEIGHT) };
 
 enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, PLAYER_MOVE };
 enum class ClientStat { FREE, ALLOCATED, ACTIVE, SLEEP };
@@ -51,11 +53,12 @@ struct Client
     mutex Mutex{};
     SOCKET Socket{};
     int ID{};
-    ExOverlapped RecvOver{};           // Recv용 Overlapped구조체 (Send와 달리 하나만 필요)
-    int PrevRecvSize{};                // 조각난 데이터를 Recv했을 경우 해당 데이터의 사이즈를 저장하는 변수
+    ExOverlapped RecvOver{};            // Recv용 Overlapped구조체 (Send와 달리 하나만 필요)
+    int PrevRecvSize{};                 // 조각난 데이터를 Recv했을 경우 해당 데이터의 사이즈를 저장하는 변수
     char PacketBuf[MAX_PACKET_SIZE]{};
     atomic<ClientStat> Status{};
-    unordered_set<int> ViewList{};     // 시야범위 내에 존재하는 클라이언트를 담기위한 자료구조
+    unordered_set<int> ViewList{};      // 시야범위 내에 존재하는 클라이언트를 담기위한 자료구조
+    int CurrentSector{ -1 };            // 현재 속해있는 섹터
 
     char Name[MAX_ID_LEN + 1]{};
     short PosX{}, PosY{};
@@ -82,11 +85,13 @@ struct Event
 
 HANDLE IOCP{};
 SOCKET ListenSocket{};
-CDBHandler DBHandler{};
-Client Clients[NPC_ID_START + MAX_NPC_COUNT]{};
 
+CDBHandler DBHandler{};
 priority_queue<Event, vector<Event>, greater<Event>> TimerQueue;
 mutex TimerLock{};
+array<unordered_set<int>, NumOfSector> Sectors{};
+
+Client Clients[NPC_ID_START + MAX_NPC_COUNT]{};
 
 void InitClients();
 void InitNPCs();
@@ -96,6 +101,10 @@ bool IsNear(int UserID, int OtherObjectID);
 bool IsPlayer(int ObjectID);
 void ActivateNPC(int NPCID);
 void AddTimerQueue(int ObjectID, EnumOp Op, int Duration);
+
+int GetSectorIdx(int PosX, int PosY);
+const vector<unordered_set<int>> GetNearSectors(int CurrentSectorIdx);
+void SetSector(int ObjectID, int NewPosX, int NewPosY);
 
 int API_GetX(lua_State* L);
 int API_GetY(lua_State* L);

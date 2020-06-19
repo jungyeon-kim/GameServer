@@ -12,14 +12,14 @@ using namespace chrono;
 
 sf::TcpSocket g_socket;
 
-constexpr auto SCREEN_WIDTH = 20;
-constexpr auto SCREEN_HEIGHT = 20;
+constexpr int SCREEN_WIDTH = SECTOR_WIDTH;
+constexpr int SCREEN_HEIGHT = SECTOR_HEIGHT;
 
-constexpr auto TILE_WIDTH = 65;
-constexpr auto WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;   // size of window
-constexpr auto WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;
-constexpr auto BUF_SIZE = 200;
-constexpr auto MAX_USER = NPC_ID_START;
+constexpr int TILE_WIDTH = 65;
+constexpr int WINDOW_WIDTH = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;   // size of window
+constexpr int WINDOW_HEIGHT = TILE_WIDTH * SCREEN_WIDTH / 2 + 10;
+constexpr int BUF_SIZE = 200;
+constexpr int MAX_USER = NPC_ID_START;
 
 int g_left_x;
 int g_top_y;

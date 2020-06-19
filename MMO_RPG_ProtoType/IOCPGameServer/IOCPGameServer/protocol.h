@@ -8,6 +8,9 @@ constexpr int MAX_ID_LEN{ 50 };
 constexpr int MAX_STR_LEN{ 50 };
 constexpr int NPC_ID_START{ MAX_USER_COUNT };
 
+constexpr int SECTOR_WIDTH{ 20 };
+constexpr int SECTOR_HEIGHT{ 20 };
+
 #define WORLD_WIDTH		800
 #define WORLD_HEIGHT	800
 
