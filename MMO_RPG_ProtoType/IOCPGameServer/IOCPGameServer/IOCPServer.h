@@ -88,8 +88,8 @@ SOCKET ListenSocket{};
 
 CDBHandler DBHandler{};
 priority_queue<Event, vector<Event>, greater<Event>> TimerQueue;
-mutex TimerLock{};
 array<unordered_set<int>, NumOfSector> Sectors{};
+mutex TimerLock{}, SectorLock{};
 
 Client Clients[NPC_ID_START + MAX_NPC_COUNT]{};
 

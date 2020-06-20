@@ -34,15 +34,17 @@ private:
 	sf::Sprite m_sprite;
 
 	char m_mess[MAX_STR_LEN];
-	high_resolution_clock::time_point m_time_out;
-	sf::Text m_text;
+	high_resolution_clock::time_point m_time_out, m_chat_timeOut{ high_resolution_clock::now() };
+	sf::Text m_text, m_chat_text, m_chat_headText;
 	sf::Text m_name;
 
 public:
 	int m_x, m_y;
 	bool isAttacking{};
-
+	bool isInputtingChat{};
 	char Name[MAX_ID_LEN];
+	sf::String m_input;
+
 	OBJECT(sf::Texture& t, int PosX, int PosY, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
@@ -82,6 +84,19 @@ public:
 		g_window->draw(m_sprite);
 		m_name.setPosition(rx - 10, ry - 30);
 		g_window->draw(m_name);
+
+		// chat
+		if (isInputtingChat)
+		{
+			g_window->draw(m_chat_headText);
+			g_window->draw(m_chat_text);
+		}
+		else if (high_resolution_clock::now() < m_chat_timeOut)
+		{
+			m_chat_text.setPosition(rx - 10, ry - 80);
+			g_window->draw(m_chat_text);
+			if (m_input.getSize()) m_input.clear();
+		}
 		if (high_resolution_clock::now() < m_time_out) {
 			m_text.setPosition(rx - 10, ry + 15);
 			g_window->draw(m_text);
@@ -93,10 +108,27 @@ public:
 		m_name.setFillColor(sf::Color(255, 255, 255));
 		m_name.setStyle(sf::Text::Bold);
 	}
-	void add_chat(char chat[]) {
+	void add_text(const char* chat) {
 		m_text.setFont(g_font);
 		m_text.setString(chat);
 		m_time_out = high_resolution_clock::now() + 1s;
+	}
+	void add_chat_text(const char* chat) {
+		m_chat_text.setFont(g_font);
+		m_chat_text.setString(chat);
+		m_chat_text.setPosition(160, WINDOW_HEIGHT * 2 - 70);
+		m_chat_text.setFillColor(sf::Color(0, 0, 0));
+		m_chat_text.setStyle(sf::Text::Bold);
+		m_chat_text.setCharacterSize(50);
+		m_chat_timeOut = high_resolution_clock::now() + 2s;
+	}
+	void add_chat_headText(const char* chat) {
+		m_chat_headText.setFont(g_font);
+		m_chat_headText.setString(chat);
+		m_chat_headText.setPosition(0, WINDOW_HEIGHT * 2 - 70);
+		m_chat_headText.setFillColor(sf::Color(20, 20, 20));
+		m_chat_headText.setStyle(sf::Text::Bold);
+		m_chat_headText.setCharacterSize(50);
 	}
 	void set_texture(sf::Texture& t, int PosX, int PosY, int x2, int y2) {
 		m_sprite.setTexture(t);
@@ -218,7 +250,7 @@ void ProcessPacket(char* ptr)
 		SC_Packet_Chat* my_packet = reinterpret_cast<SC_Packet_Chat*>(ptr);
 		int other_id{ my_packet->ID };
 
-		if (npcs.count(other_id)) npcs[other_id].add_chat(my_packet->Msg);
+		if (npcs.count(other_id)) npcs[other_id].add_chat_text(my_packet->Msg);
 	}
 	break;
 	case SC_ATTACK_START:
@@ -341,6 +373,15 @@ void send_attack_packet(char Type)
 	send_packet(&m_packet);
 }
 
+void send_chat_packet(const char* msg)
+{
+	CS_Packet_Chat m_packet;
+	m_packet.Type = CS_CHAT;
+	m_packet.Size = sizeof(m_packet);
+	strcpy_s(m_packet.Msg, msg);
+	send_packet(&m_packet);
+}
+
 int main()
 {
 	wcout.imbue(locale("korean"));
@@ -443,10 +484,18 @@ int main()
 		sf::Event event;
 		while (window.pollEvent(event))
 		{
-			if (event.type == sf::Event::Closed)
-				window.close();
+			if (event.type == sf::Event::Closed) window.close();
+
+			if (event.type == sf::Event::TextEntered && avatar.isInputtingChat)
+			{
+				if (event.key.code != sf::Keyboard::I) avatar.m_input += event.text.unicode;
+				else if (avatar.m_input.getSize()) avatar.m_input.erase(avatar.m_input.getSize() - 1);
+
+				avatar.add_chat_text(avatar.m_input.toAnsiString().c_str());
+			}
+
 			if (event.type == sf::Event::KeyReleased)
-				if (event.key.code)
+				if (event.key.code == sf::Keyboard::Space)
 				{
 					avatar.set_texture(*player, 0, 0, 64, 64);
 					send_attack_packet(CS_ATTACK_END);
@@ -455,6 +504,21 @@ int main()
 			if (event.type == sf::Event::KeyPressed) {
 				int p_type = -1;
 				switch (event.key.code) {
+				case sf::Keyboard::Enter:
+				{
+					if (!avatar.isInputtingChat)
+					{
+						avatar.isInputtingChat = true;
+						avatar.add_chat_headText("CHAT: ");
+					}
+					else
+					{
+						avatar.isInputtingChat = false;
+						send_chat_packet(avatar.m_input.toAnsiString().c_str());
+					}
+
+					break;
+				}
 				case sf::Keyboard::Left:
 					send_move_packet(D_LEFT);
 					break;

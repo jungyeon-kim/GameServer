@@ -92,10 +92,12 @@ const vector<unordered_set<int>> GetNearSectors(int CurrentSectorIdx)
     static int NumOfColumn{ WORLD_WIDTH / SECTOR_WIDTH };
     vector<unordered_set<int>> NearSectors{};
 
+    SectorLock.lock();
     for (int Column = -NumOfColumn - 1; Column < NumOfColumn; Column += NumOfColumn)
         for (int Row = Column; Row < Column + 3; ++Row)
             if (0 <= CurrentSectorIdx + Row && CurrentSectorIdx + Row < NumOfSector)
                 NearSectors.emplace_back(Sectors[CurrentSectorIdx + Row]);
+    SectorLock.unlock();
 
     return NearSectors;
 }
@@ -144,7 +146,7 @@ int API_SendMsg(lua_State* L)
     int MyID{ (int)lua_tointeger(L, -3) };
     int UserID{ (int)lua_tointeger(L, -2) };
     char* Msg{ (char*)lua_tostring(L, -1) };
-    Send_Packet_Chat(UserID, MyID, Msg);
+    //Send_Packet_Chat(UserID, MyID, Msg);
     return 0;
 }
 
@@ -508,6 +510,16 @@ void ProcessPacket(int UserID, char* Buf)
         }
         break;
     }
+    case CS_CHAT:
+    {
+        CS_Packet_Chat* Packet{ reinterpret_cast<CS_Packet_Chat*>(Buf) };
+
+        for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
+            for (auto& ObjectID : Sector)
+                if (IsPlayer(ObjectID))
+                    Send_Packet_Chat(ObjectID, UserID, Packet->Msg);
+    }
+    break;
     default:
         cout << "Unknown PacketType Error." << endl;
         DebugBreak();
@@ -610,7 +622,7 @@ void WorkerThread()
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)
                 {
-                    if (Clients[PlayerID].ID >= NPC_ID_START) continue;
+                    if (!IsPlayer(Clients[PlayerID].ID)) continue;
 
                     if (IsNear(PlayerID, ObjectID))
                     {
@@ -643,7 +655,7 @@ void WorkerThread()
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)
                 {
-                    if (Clients[PlayerID].ID >= NPC_ID_START) continue;
+                    if (!IsPlayer(Clients[PlayerID].ID)) continue;
 
                     if (IsNear(PlayerID, ObjectID) && Clients[PlayerID].Status == ClientStat::ACTIVE)
                     {
@@ -664,7 +676,9 @@ void WorkerThread()
             lua_getglobal(L, "BeginOverlap");
             lua_pushnumber(L, ExOver->PlayerID);
             int Error{ lua_pcall(L, 1, 0, 0) };
+            #if defined(_DEBUG)
             if (Error) cout << lua_tostring(L, -1) << endl;
+            #endif
             // EventPlayerMove은 리턴값이 없으므로 pop할게 없다. (lua_pcall()에서 모두 pop되기 때문)
             Clients[ObjectID].LuaMutex.unlock();
 

@@ -2,8 +2,8 @@
 
 constexpr int MAX_BUF_SIZE{ 1024 };
 constexpr int MAX_PACKET_SIZE{ 255 };
-constexpr int MAX_USER_COUNT{ 20000 };
-constexpr int MAX_NPC_COUNT{ 10000 };
+constexpr int MAX_USER_COUNT{ 10000 };
+constexpr int MAX_NPC_COUNT{ 2000 };
 constexpr int MAX_ID_LEN{ 50 };
 constexpr int MAX_STR_LEN{ 50 };
 constexpr int NPC_ID_START{ MAX_USER_COUNT };
@@ -31,6 +31,7 @@ constexpr int SECTOR_HEIGHT{ 20 };
 #define CS_MOVE			4
 #define CS_ATTACK_START	7
 #define CS_ATTACK_END	8
+#define CS_CHAT			9
 
 #pragma pack(push ,1)
 
@@ -121,6 +122,13 @@ struct CS_Packet_Attack
 {
 	char Size{};
 	char Type{};
+};
+
+struct CS_Packet_Chat
+{
+	char Size{};
+	char Type{};
+	char Msg[MAX_STR_LEN]{};
 };
 
 #pragma pack (pop)
