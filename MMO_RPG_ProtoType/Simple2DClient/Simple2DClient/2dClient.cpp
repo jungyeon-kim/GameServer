@@ -4,7 +4,6 @@
 #include <iostream>
 #include <unordered_map>
 #include <chrono>
-#include <cmath>
 
 using namespace std;
 using namespace chrono;
@@ -66,17 +65,17 @@ public:
 		m_showing = false;
 	}
 
-	void a_move(int PosX, int PosY) {
-		m_sprite.setPosition((float)PosX, (float)PosY);
+	void a_move(int NewPosX, int NewPosY) {
+		m_sprite.setPosition((float)NewPosX, (float)NewPosY);
 	}
 
 	void a_draw() {
 		g_window->draw(m_sprite);
 	}
 
-	void move(int PosX, int PosY) {
-		PosX = PosX;
-		PosY = PosY;
+	void move(int NewPosX, int NewPosY) {
+		PosX = NewPosX;
+		PosY = NewPosY;
 	}
 	void draw() {
 		if (false == m_showing) return;
@@ -86,8 +85,12 @@ public:
 		g_window->draw(m_sprite);
 		m_name.setPosition(rx - 10, ry - 30);
 		g_window->draw(m_name);
+	}
+	void draw_UI()
+	{
+		float rx = (PosX - g_left_x) * 65.0f + 8;
+		float ry = (PosY - g_top_y) * 65.0f + 8;
 
-		// chat
 		if (isInputtingChat)
 		{
 			g_window->draw(m_chat_headText);
@@ -104,8 +107,9 @@ public:
 			g_window->draw(m_text);
 		}
 
-		// UI
-		//set_UI("Level", "Exp", "HP");
+		set_UI("Level: " + to_string(Level), "Exp: " +
+			to_string(Exp) + " / " + to_string(static_cast<int>(100 * pow(2, Level - 1))), "HP: " + to_string(HP));
+		for (int i = 0; i < 3; ++i) g_window->draw(UI[i]);
 	}
 	void set_name(char str[]) {
 		m_name.setFont(g_font);
@@ -139,7 +143,7 @@ public:
 		m_sprite.setTexture(t);
 		m_sprite.setTextureRect(sf::IntRect(PosX, PosY, x2, y2));
 	}
-	void set_UI(const char* Level, const char* Exp, const char* HP) {
+	void set_UI(string Level, string Exp, string HP) {
 		for (int i = 0; i < 3; ++i)
 		{
 			UI[i].setFont(g_font);
@@ -148,11 +152,11 @@ public:
 			UI[i].setCharacterSize(50);
 		}
 		UI[0].setString(Level);
-		UI[0].setPosition(0, 0);
+		UI[0].setPosition(10, 50);
 		UI[1].setString(Exp);
-		UI[1].setPosition(0, 100);
+		UI[1].setPosition(10, 100);
 		UI[2].setString(HP);
-		UI[3].setPosition(0, 200);
+		UI[2].setPosition(10, 150);
 	}
 };
 
@@ -308,6 +312,30 @@ void ProcessPacket(char* ptr)
 		npcs[other_id].show();
 	}
 	break;
+	case SC_LEVEL:
+	{
+		SC_Packet_Data* my_packet = reinterpret_cast<SC_Packet_Data*>(ptr);
+		int Data{ my_packet->Data };
+
+		avatar.Level = Data;
+	}
+	break;
+	case SC_EXP:
+	{
+		SC_Packet_Data* my_packet = reinterpret_cast<SC_Packet_Data*>(ptr);
+		int Data{ my_packet->Data };
+
+		avatar.Exp = Data;
+	}
+	break;
+	case SC_HP:
+	{
+		SC_Packet_Data* my_packet = reinterpret_cast<SC_Packet_Data*>(ptr);
+		int Data{ my_packet->Data };
+
+		avatar.Exp = Data;
+	}
+	break;
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 
@@ -378,6 +406,7 @@ void client_main()
 			}
 		}
 	avatar.draw();
+	avatar.draw_UI();
 	for (auto& npc : npcs) npc.second.draw();
 	sf::Text text;
 	text.setFont(g_font);
@@ -385,7 +414,6 @@ void client_main()
 	sprintf_s(buf, "(%d, %d)", avatar.PosX, avatar.PosY);
 	text.setString(buf);
 	g_window->draw(text);
-
 }
 
 void send_packet(void* packet)

@@ -15,6 +15,7 @@ void InitNPCs()
         Clients[i].Status = ClientStat::SLEEP;
         Clients[i].PosX = rand() % WORLD_WIDTH;
         Clients[i].PosY = rand() % WORLD_HEIGHT;
+        Clients[i].Level = rand() % 20;
         Clients[i].HP = 100;
 
         // ºΩ≈Õ πË¡§
@@ -183,8 +184,8 @@ void Send_Packet_Login_Ok(int UserID)
     Packet.Size = sizeof(Packet);
     Packet.Type = SC_LOGIN_OK;
     Packet.ID = UserID;
-    Packet.Exp = Clients[UserID].Exp;
     Packet.Level = Clients[UserID].Level;
+    Packet.Exp = Clients[UserID].Exp;
     Packet.HP = Clients[UserID].HP;
     Packet.PosX = Clients[UserID].PosX;
     Packet.PosY = Clients[UserID].PosY;
@@ -270,6 +271,17 @@ void Send_Packet_DeadorAlive(int UserID, int OtherUserID, char Type)
     Packet.Size = sizeof(Packet);
     Packet.Type = Type;
     Packet.ID = OtherUserID;
+
+    Send_Packet(UserID, &Packet);
+}
+
+void Send_Packet_Data(int UserID, char Type, short Data)
+{
+    SC_Packet_Data Packet{};
+
+    Packet.Size = sizeof(Packet);
+    Packet.Type = Type;
+    Packet.Data = Data;
 
     Send_Packet(UserID, &Packet);
 }
@@ -517,9 +529,18 @@ void ProcessPacket(int UserID, char* Buf)
                 {
                     Clients[VisibleObject].HP -= 20;
                     if (Clients[VisibleObject].HP < 0) Clients[VisibleObject].HP = 0;
-                    if (!Clients[VisibleObject].HP)
+                    if (!Clients[VisibleObject].HP) // ¿˚ ªÁ∏¡Ω√
                     {
                         Clients[VisibleObject].Status = ClientStat::DEAD;
+
+                        // ∞Ê«Ëƒ° »πµÊ
+                        Send_Packet_Data(UserID, SC_EXP, Clients[UserID].Exp += Clients[VisibleObject].Level * 5);
+                        // ∑π∫ßæ˜
+                        if (Clients[UserID].Exp >= 100 * pow(2, Clients[UserID].Level - 1))
+                        {
+                            Send_Packet_Data(UserID, SC_LEVEL, Clients[UserID].Level += 1);
+                            Send_Packet_Data(UserID, SC_EXP, Clients[UserID].Exp = 0);
+                        }
 
                         for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
                             for (auto& PlayerID : Sector)

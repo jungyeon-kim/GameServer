@@ -26,6 +26,9 @@ constexpr int SECTOR_HEIGHT{ 20 };
 #define SC_ATTACK_END	8
 #define SC_DEAD			9
 #define SC_RESPAWN		10
+#define SC_LEVEL		11
+#define SC_EXP			12
+#define SC_HP			13
 
 #define CS_SIGNUP		1
 #define CS_SIGNOUT		2
@@ -50,9 +53,9 @@ struct SC_Packet_Login_OK
 	char Type{};
 	int ID{};
 	short PosX{}, PosY{};
-	short HP{};
 	short Level{};
-	int	Exp{};
+	short Exp{};
+	short HP{};
 };
 
 struct SC_Packet_Move 
@@ -104,6 +107,13 @@ struct SC_Packet_DeadorAlive
 	char Size{};
 	char Type{};
 	int ID{};
+};
+
+struct SC_Packet_Data
+{
+	char Size{};
+	char Type{};
+	short Data{};
 };
 
 struct CS_Packet_Login 

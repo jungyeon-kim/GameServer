@@ -120,6 +120,7 @@ void Send_Packet_Chat(int UserID, int Chatter, char Msg[]);
 void Send_Packet_Move(int UserID, int MovedUserId);
 void Send_Packet_Attack(int UserID, int OtherUserID, char Type);
 void Send_Packet_DeadorAlive(int UserID, int OtherUserID, char Type);
+void Send_Packet_Data(int UserID, char Type, short Data);
 void RecvPacketAssemble(int UserID, int RecvByte);
 
 void ProcessPacket(int UserID, char* Buf);
