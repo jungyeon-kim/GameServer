@@ -32,8 +32,8 @@ using namespace chrono;
 constexpr int VIEW_RANGE{ 8 }; 
 constexpr int NumOfSector{ (WORLD_WIDTH / SECTOR_WIDTH) * (WORLD_HEIGHT / SECTOR_HEIGHT) };
 
-enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, PLAYER_MOVE };
-enum class ClientStat { FREE, ALLOCATED, ACTIVE, SLEEP };
+enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, PLAYER_MOVE, RESPAWN };
+enum class ClientStat { FREE, ALLOCATED, ACTIVE, SLEEP, DEAD };
 
 struct ExOverlapped
 {
@@ -62,6 +62,7 @@ struct Client
 
     char Name[MAX_ID_LEN + 1]{};
     short PosX{}, PosY{};
+    short HP{}, Level{}, Exp{};
 
     unsigned MoveTime{};
     high_resolution_clock::time_point LastMoveTime{};
@@ -97,7 +98,7 @@ void InitClients();
 void InitNPCs();
 void Disconnect(int UserID);
 
-bool IsNear(int UserID, int OtherObjectID);
+bool IsNear(int UserID, int OtherObjectID, int Range);
 bool IsPlayer(int ObjectID);
 void ActivateNPC(int NPCID);
 void AddTimerQueue(int ObjectID, EnumOp Op, int Duration);
@@ -118,6 +119,7 @@ void Send_Packet_Leave(int UserID, int OtherObjectID);
 void Send_Packet_Chat(int UserID, int Chatter, char Msg[]);
 void Send_Packet_Move(int UserID, int MovedUserId);
 void Send_Packet_Attack(int UserID, int OtherUserID, char Type);
+void Send_Packet_DeadorAlive(int UserID, int OtherUserID, char Type);
 void RecvPacketAssemble(int UserID, int RecvByte);
 
 void ProcessPacket(int UserID, char* Buf);

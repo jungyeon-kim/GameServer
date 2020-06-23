@@ -24,6 +24,8 @@ constexpr int SECTOR_HEIGHT{ 20 };
 #define SC_MOVE			6
 #define SC_ATTACK_START	7
 #define SC_ATTACK_END	8
+#define SC_DEAD			9
+#define SC_RESPAWN		10
 
 #define CS_SIGNUP		1
 #define CS_SIGNOUT		2
@@ -91,6 +93,13 @@ struct SC_Packet_Chat
 };
 
 struct SC_Packet_Attack
+{
+	char Size{};
+	char Type{};
+	int ID{};
+};
+
+struct SC_Packet_DeadorAlive
 {
 	char Size{};
 	char Type{};

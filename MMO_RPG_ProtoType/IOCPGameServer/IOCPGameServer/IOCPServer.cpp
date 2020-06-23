@@ -15,6 +15,7 @@ void InitNPCs()
         Clients[i].Status = ClientStat::SLEEP;
         Clients[i].PosX = rand() % WORLD_WIDTH;
         Clients[i].PosY = rand() % WORLD_HEIGHT;
+        Clients[i].HP = 100;
 
         // 섹터 배정
         SetSector(i, Clients[i].PosX, Clients[i].PosY);
@@ -39,8 +40,9 @@ void Disconnect(int UserID)
 {
     if (Clients[UserID].Status == ClientStat::ACTIVE)
     {
-        // 종료전 해당 유저의 현재 위치를 DB에 Set
-        DBHandler.SetDBPosition(Clients[UserID].Name, Clients[UserID].PosX, Clients[UserID].PosY);
+        // 종료전 해당 유저의 현재 상태를 DB에 Set
+        DBHandler.SetDBData(Clients[UserID].Name, Clients[UserID].PosX, Clients[UserID].PosY, 
+            Clients[UserID].Level, Clients[UserID].Exp, Clients[UserID].HP);
         // 종료전 해당 유저의 섹터 정보를 초기화
         Sectors[Clients[UserID].CurrentSector].erase(UserID);
         Clients[UserID].CurrentSector = -1;
@@ -64,10 +66,10 @@ void Disconnect(int UserID)
     Clients[UserID].Mutex.unlock();
 }
 
-bool IsNear(int UserID, int OtherObjectID)
+bool IsNear(int UserID, int OtherObjectID, int Range)
 {
-    return abs(Clients[UserID].PosX - Clients[OtherObjectID].PosX) <= VIEW_RANGE &&
-        abs(Clients[UserID].PosY - Clients[OtherObjectID].PosY) <= VIEW_RANGE;
+    return abs(Clients[UserID].PosX - Clients[OtherObjectID].PosX) <= Range &&
+        abs(Clients[UserID].PosY - Clients[OtherObjectID].PosY) <= Range;
 }
 
 bool IsPlayer(int ObjectID)
@@ -181,9 +183,9 @@ void Send_Packet_Login_Ok(int UserID)
     Packet.Size = sizeof(Packet);
     Packet.Type = SC_LOGIN_OK;
     Packet.ID = UserID;
-    Packet.Exp = 0;
-    Packet.Level = 0;
-    Packet.HP = 0;
+    Packet.Exp = Clients[UserID].Exp;
+    Packet.Level = Clients[UserID].Level;
+    Packet.HP = Clients[UserID].HP;
     Packet.PosX = Clients[UserID].PosX;
     Packet.PosY = Clients[UserID].PosY;
 
@@ -251,6 +253,17 @@ void Send_Packet_Move(int UserID, int MovedUserId)
 }
 
 void Send_Packet_Attack(int UserID, int OtherUserID, char Type)
+{
+    SC_Packet_Attack Packet{};
+
+    Packet.Size = sizeof(Packet);
+    Packet.Type = Type;
+    Packet.ID = OtherUserID;
+
+    Send_Packet(UserID, &Packet);
+}
+
+void Send_Packet_DeadorAlive(int UserID, int OtherUserID, char Type)
 {
     SC_Packet_Attack Packet{};
 
@@ -349,8 +362,9 @@ void ProcessPacket(int UserID, char* Buf)
         strcpy_s(Clients[UserID].Name, Packet->Name);
         Clients[UserID].Name[MAX_ID_LEN] = NULL;
 
-        // DB에서 클라이언트의 위치를 받아와 Set
-        DBHandler.SetClientPosition(Clients[UserID].Name, Clients[UserID].PosX, Clients[UserID].PosY);
+        // DB에서 클라이언트의 상태를 받아와 Set
+        DBHandler.SetClientData(Clients[UserID].Name, Clients[UserID].PosX, Clients[UserID].PosY,
+            Clients[UserID].Level, Clients[UserID].Exp, Clients[UserID].HP);
         // 섹터 배정
         SetSector(UserID, Clients[UserID].PosX, Clients[UserID].PosY);
 
@@ -363,7 +377,7 @@ void ProcessPacket(int UserID, char* Buf)
             for (auto& ObjectID : Sector)
             {
                 if (UserID == ObjectID) continue;   // 데드락 & 자신에게 보내는 것 방지
-                if (IsNear(UserID, ObjectID))
+                if (IsNear(UserID, ObjectID, VIEW_RANGE))
                 {
                     //Clients[i].Mutex.lock();
                     if (Clients[ObjectID].Status == ClientStat::SLEEP) ActivateNPC(ObjectID);
@@ -412,10 +426,11 @@ void ProcessPacket(int UserID, char* Buf)
         for(auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
             for (auto& ObjectID : Sector)
             {
-                if (!IsNear(UserID, ObjectID) || ObjectID == UserID) continue;
-                if (Clients[ObjectID].Status == ClientStat::SLEEP) ActivateNPC(ObjectID);
+                if (!IsNear(UserID, ObjectID, VIEW_RANGE) || ObjectID == UserID) continue;
                 if (!IsPlayer(ObjectID))
                 {
+                    if (Clients[ObjectID].Status == ClientStat::SLEEP) ActivateNPC(ObjectID);
+
                     ExOverlapped* ExOver{ new ExOverlapped{} };
                     ExOver->Op = EnumOp::PLAYER_MOVE;
                     ExOver->PlayerID = UserID;
@@ -428,6 +443,8 @@ void ProcessPacket(int UserID, char* Buf)
 
         for (auto& NewVisibleObject : NewViewList)
         {
+            if (Clients[NewVisibleObject].Status == ClientStat::DEAD) continue;
+
             // 오브젝트가 새로 시야에 들어왔을 때
             if (!OldViewList.count(NewVisibleObject))
             {
@@ -468,6 +485,8 @@ void ProcessPacket(int UserID, char* Buf)
         // 오브젝트가 시야에서 사라졌을 때
         for (auto& OldVisibleObject : OldViewList)
         {
+            if (Clients[OldVisibleObject].Status == ClientStat::DEAD) continue;
+
             if (!NewViewList.count(OldVisibleObject))
             {
                 Send_Packet_Leave(UserID, OldVisibleObject);
@@ -492,7 +511,28 @@ void ProcessPacket(int UserID, char* Buf)
 
         for (auto& VisibleObject : ViewList)
         {
-            if (!IsPlayer(VisibleObject)) continue;
+            if (!IsPlayer(VisibleObject))
+            {
+                if (IsNear(UserID, VisibleObject, 1) && Clients[VisibleObject].Status != ClientStat::DEAD)
+                {
+                    Clients[VisibleObject].HP -= 20;
+                    if (Clients[VisibleObject].HP < 0) Clients[VisibleObject].HP = 0;
+                    if (!Clients[VisibleObject].HP)
+                    {
+                        Clients[VisibleObject].Status = ClientStat::DEAD;
+
+                        for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
+                            for (auto& PlayerID : Sector)
+                            {
+                                if (!IsPlayer(PlayerID)) continue;
+                                Send_Packet_DeadorAlive(PlayerID, VisibleObject, SC_DEAD);
+                                AddTimerQueue(VisibleObject, EnumOp::RESPAWN, 5000);
+                            }
+                    }
+                }
+                continue;
+            }
+
             Send_Packet_Attack(VisibleObject, UserID, CS_ATTACK_START);
         }
         break;
@@ -624,7 +664,7 @@ void WorkerThread()
                 {
                     if (!IsPlayer(Clients[PlayerID].ID)) continue;
 
-                    if (IsNear(PlayerID, ObjectID))
+                    if (IsNear(PlayerID, ObjectID, VIEW_RANGE))
                     {
                         Clients[PlayerID].Mutex.lock();
                         if (Clients[PlayerID].ViewList.count(ObjectID))
@@ -650,21 +690,21 @@ void WorkerThread()
                     }
                 }
 
-            // NPC가 플레이어 근처에 있다면 다시 타이머 큐에 넣고 그렇지 않다면 잠재운다.
+            // NPC가 플레이어 근처에 있고 살아있다면 다시 타이머 큐에 넣고 그렇지 않다면 잠재운다.
             bool Flag{};
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)
                 {
                     if (!IsPlayer(Clients[PlayerID].ID)) continue;
 
-                    if (IsNear(PlayerID, ObjectID) && Clients[PlayerID].Status == ClientStat::ACTIVE)
+                    if (IsNear(PlayerID, ObjectID, VIEW_RANGE) && Clients[ObjectID].Status == ClientStat::ACTIVE)
                     {
                         Flag = true;
                         break;
                     }
                 }
             if (Flag) AddTimerQueue(ObjectID, ExOver->Op, 1000);
-            else Clients[ObjectID].Status = ClientStat::SLEEP;
+            else if (Clients[ObjectID].Status != ClientStat::DEAD) Clients[ObjectID].Status = ClientStat::SLEEP;
 
             delete ExOver;
             break;
@@ -683,6 +723,23 @@ void WorkerThread()
             Clients[ObjectID].LuaMutex.unlock();
 
             delete ExOver;
+            break;
+        }
+        case EnumOp::RESPAWN:
+        {
+            bool IsInPlayerView{};
+
+            for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
+                for (auto& PlayerID : Sector)
+                {
+                    if (!IsPlayer(PlayerID)) continue;
+                    if (!IsInPlayerView) IsInPlayerView = true;
+                    Send_Packet_DeadorAlive(PlayerID, ObjectID, SC_RESPAWN);
+                }
+
+            Clients[ObjectID].Status = ClientStat::SLEEP;
+            Clients[ObjectID].HP = 100;
+            if (IsInPlayerView) ActivateNPC(ObjectID);
             break;
         }
         default:
@@ -710,10 +767,19 @@ void TimerThread()
             switch (Event.Op)
             {
             case EnumOp::RANDOM_MOVE:
+            {
                 ExOverlapped* ExOver{ new ExOverlapped{} };
                 ExOver->Op = Event.Op;
                 PostQueuedCompletionStatus(IOCP, 1, Event.ObjectID, &ExOver->Over);
                 break;
+            }
+            case EnumOp::RESPAWN:
+            {
+                ExOverlapped* ExOver{ new ExOverlapped{} };
+                ExOver->Op = Event.Op;
+                PostQueuedCompletionStatus(IOCP, 1, Event.ObjectID, &ExOver->Over);
+                break;
+            }
             }
         }
     }

@@ -14,8 +14,8 @@ private:
     SQLHSTMT hstmt{};
     SQLRETURN retcode{};
     SQLWCHAR UserID[MAX_ID_LEN]{};
-    SQLINTEGER UserPosX{}, UserPosY{};
-    SQLLEN cbUserID{}, cbUserPosX{}, cbUserPosY{};
+    SQLINTEGER UserPosX{}, UserPosY{}, UserLevel{}, UserExp{}, UserHP{};
+    SQLLEN cbUserID{}, cbUserPosX{}, cbUserPosY{}, cbUserLevel{}, cbUserExp{}, cbUserHP{};
 public:
     CDBHandler();
     ~CDBHandler();
@@ -28,6 +28,6 @@ public:
     bool SignUp(std::string ID, std::string Password);
     bool SignOut(std::string ID, std::string Password);
     bool IsValidedUser(std::string ID, std::string Password);
-    void SetClientPosition(std::string ID, short& X, short& Y);
-    void SetDBPosition(std::string ID, short X, short Y);
+    void SetClientData(std::string ID, short& PosX, short& PosY, short& Level, short& Exp, short& HP);
+    void SetDBData(std::string ID, short& PosX, short& PosY, short& Level, short& Exp, short& HP);
 };

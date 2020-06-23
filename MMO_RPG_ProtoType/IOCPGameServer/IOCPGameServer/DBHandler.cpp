@@ -161,9 +161,9 @@ bool CDBHandler::IsValidedUser(string ID, string Password)
     return false;
 }
 
-void CDBHandler::SetClientPosition(string ID, short& X, short& Y)
+void CDBHandler::SetClientData(string ID, short& PosX, short& PosY, short& Level, short& Exp, short& HP)
 {
-    wstring Query{ L"EXEC SetClientPosition " + StringToWstring(ID) };
+    wstring Query{ L"EXEC SetClientData " + StringToWstring(ID) };
 
     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
     {
@@ -174,6 +174,9 @@ void CDBHandler::SetClientPosition(string ID, short& X, short& Y)
         {
             retcode = SQLBindCol(hstmt, 1, SQL_C_LONG, &UserPosX, 100, &cbUserPosX);
             retcode = SQLBindCol(hstmt, 2, SQL_C_LONG, &UserPosY, 100, &cbUserPosY);
+            retcode = SQLBindCol(hstmt, 3, SQL_C_LONG, &UserLevel, 100, &cbUserLevel);
+            retcode = SQLBindCol(hstmt, 4, SQL_C_LONG, &UserExp, 100, &cbUserExp);
+            retcode = SQLBindCol(hstmt, 5, SQL_C_LONG, &UserHP, 100, &cbUserHP);
             retcode = SQLFetch(hstmt);
 
             if (retcode == SQL_ERROR) show_error();
@@ -182,13 +185,16 @@ void CDBHandler::SetClientPosition(string ID, short& X, short& Y)
             {
                 if (ID == "adminKJY")   // 더미 클라이언트의 경우
                 {
-                    X = rand() % WORLD_WIDTH;
-                    Y = rand() % WORLD_HEIGHT;
+                    PosX = rand() % WORLD_WIDTH;
+                    PosY = rand() % WORLD_HEIGHT;
                 }
                 else
                 {
-                    X = UserPosX;
-                    Y = UserPosY;
+                   PosX = UserPosX;
+                   PosY = UserPosY;
+                   Level = UserLevel;
+                   Exp = UserExp;
+                   HP = UserHP;
                 }
             }
         }
@@ -197,11 +203,12 @@ void CDBHandler::SetClientPosition(string ID, short& X, short& Y)
     }
 }
 
-void CDBHandler::SetDBPosition(string ID, short X, short Y)
+void CDBHandler::SetDBData(string ID, short& PosX, short& PosY, short& Level, short& Exp, short& HP)
 {
     if (ID == "adminKJY") return;
 
-    wstring Query{ L"EXEC SetDBPosition " + StringToWstring(ID) + L", " + to_wstring(X) + L", " + to_wstring(Y) };
+    wstring Query{ L"EXEC SetDBData " + StringToWstring(ID) + L", " + to_wstring(PosX) + L", " + to_wstring(PosY) 
+        + L", " + to_wstring(Level) + L", " + to_wstring(Exp) + L", " + to_wstring(HP) };
 
     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
     {
@@ -213,7 +220,7 @@ void CDBHandler::SetDBPosition(string ID, short X, short Y)
             if (retcode == SQL_ERROR) show_error();
 
             if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
-                cout << "Saved Position of " << ID << "." << endl;
+                cout << "Saved Status of " << ID << "." << endl;
         }
         else
             HandleDiagnosticRecord(hstmt, SQL_HANDLE_STMT, retcode);

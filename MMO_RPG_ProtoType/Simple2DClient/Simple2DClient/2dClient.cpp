@@ -4,6 +4,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <chrono>
+#include <cmath>
 
 using namespace std;
 using namespace chrono;
@@ -36,10 +37,11 @@ private:
 	char m_mess[MAX_STR_LEN];
 	high_resolution_clock::time_point m_time_out, m_chat_timeOut{ high_resolution_clock::now() };
 	sf::Text m_text, m_chat_text, m_chat_headText;
+	sf::Text UI[3];
 	sf::Text m_name;
 
 public:
-	int m_x, m_y;
+	int PosX, PosY, Level, Exp, HP;
 	bool isAttacking{};
 	bool isInputtingChat{};
 	char Name[MAX_ID_LEN];
@@ -73,13 +75,13 @@ public:
 	}
 
 	void move(int PosX, int PosY) {
-		m_x = PosX;
-		m_y = PosY;
+		PosX = PosX;
+		PosY = PosY;
 	}
 	void draw() {
 		if (false == m_showing) return;
-		float rx = (m_x - g_left_x) * 65.0f + 8;
-		float ry = (m_y - g_top_y) * 65.0f + 8;
+		float rx = (PosX - g_left_x) * 65.0f + 8;
+		float ry = (PosY - g_top_y) * 65.0f + 8;
 		m_sprite.setPosition(rx, ry);
 		g_window->draw(m_sprite);
 		m_name.setPosition(rx - 10, ry - 30);
@@ -101,6 +103,9 @@ public:
 			m_text.setPosition(rx - 10, ry + 15);
 			g_window->draw(m_text);
 		}
+
+		// UI
+		//set_UI("Level", "Exp", "HP");
 	}
 	void set_name(char str[]) {
 		m_name.setFont(g_font);
@@ -133,6 +138,21 @@ public:
 	void set_texture(sf::Texture& t, int PosX, int PosY, int x2, int y2) {
 		m_sprite.setTexture(t);
 		m_sprite.setTextureRect(sf::IntRect(PosX, PosY, x2, y2));
+	}
+	void set_UI(const char* Level, const char* Exp, const char* HP) {
+		for (int i = 0; i < 3; ++i)
+		{
+			UI[i].setFont(g_font);
+			UI[i].setFillColor(sf::Color(0, 0, 255));
+			UI[i].setStyle(sf::Text::Bold);
+			UI[i].setCharacterSize(50);
+		}
+		UI[0].setString(Level);
+		UI[0].setPosition(0, 0);
+		UI[1].setString(Exp);
+		UI[1].setPosition(0, 100);
+		UI[2].setString(HP);
+		UI[3].setPosition(0, 200);
 	}
 };
 
@@ -186,6 +206,9 @@ void ProcessPacket(char* ptr)
 		SC_Packet_Login_OK* my_packet = reinterpret_cast<SC_Packet_Login_OK*>(ptr);
 		g_myid = my_packet->ID;
 		avatar.move(my_packet->PosX, my_packet->PosY);
+		avatar.Level = my_packet->Level;
+		avatar.Exp = my_packet->Exp;
+		avatar.HP = my_packet->HP;
 		g_left_x = my_packet->PosX - (SCREEN_WIDTH / 2);
 		g_top_y = my_packet->PosY - (SCREEN_HEIGHT / 2);
 		avatar.show();
@@ -260,7 +283,7 @@ void ProcessPacket(char* ptr)
 
 		npcs[other_id].set_texture(*player, 384, 0, 64, 64);
 	}
-		break;
+	break;
 	case SC_ATTACK_END:
 	{
 		SC_Packet_Attack* my_packet = reinterpret_cast<SC_Packet_Attack*>(ptr);
@@ -268,7 +291,23 @@ void ProcessPacket(char* ptr)
 
 		npcs[other_id].set_texture(*player, 0, 0, 64, 64);
 	}
-		break;
+	break;
+	case SC_DEAD:
+	{
+		SC_Packet_DeadorAlive* my_packet = reinterpret_cast<SC_Packet_DeadorAlive*>(ptr);
+		int other_id{ my_packet->ID };
+
+		npcs[other_id].hide();
+	}
+	break;
+	case SC_RESPAWN:
+	{
+		SC_Packet_DeadorAlive* my_packet = reinterpret_cast<SC_Packet_DeadorAlive*>(ptr);
+		int other_id{ my_packet->ID };
+
+		npcs[other_id].show();
+	}
+	break;
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 
@@ -343,7 +382,7 @@ void client_main()
 	sf::Text text;
 	text.setFont(g_font);
 	char buf[100];
-	sprintf_s(buf, "(%d, %d)", avatar.m_x, avatar.m_y);
+	sprintf_s(buf, "(%d, %d)", avatar.PosX, avatar.PosY);
 	text.setString(buf);
 	g_window->draw(text);
 
