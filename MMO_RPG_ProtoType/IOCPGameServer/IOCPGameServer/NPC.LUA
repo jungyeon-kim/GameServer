@@ -8,7 +8,9 @@ end
 function BeginOverlap( PlayerID )
 	if API_GetX(PlayerID) == API_GetX(MyID) then
 		if API_GetY(PlayerID) == API_GetY(MyID) then
-			API_TakeDamage(PlayerID, Damage)
+			if API_IsDead(MyID) == false then
+				API_TakeDamage(PlayerID, Damage)
+			end
 		end
 	end
 end

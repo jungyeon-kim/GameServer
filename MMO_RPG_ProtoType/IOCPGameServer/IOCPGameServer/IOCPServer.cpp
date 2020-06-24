@@ -59,6 +59,7 @@ void InitNPCs()
         // lua에 함수 등록
         lua_register(L, "API_GetX", API_GetX);
         lua_register(L, "API_GetY", API_GetY);
+        lua_register(L, "API_IsDead", API_IsDead);
         lua_register(L, "API_TakeDamage", API_TakeDamage);
 
     }
@@ -168,6 +169,14 @@ int API_GetY(lua_State* L)
 {
     int ObjectID{ (int)lua_tointeger(L, -1) };
     lua_pushnumber(L, Clients[ObjectID].PosY);
+    return 1;
+}
+
+int API_IsDead(lua_State* L)
+{
+    int ObjectID{ (int)lua_tointeger(L, -1) };
+    if (Clients[ObjectID].Status == ClientStat::DEAD) lua_pushboolean(L, true);
+    else lua_pushboolean(L, false);
     return 1;
 }
 
@@ -708,6 +717,18 @@ void WorkerThread()
 
             Clients[ObjectID].PosX = PosX;
             Clients[ObjectID].PosY = PosY;
+
+            for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
+                for (auto& PlayerID : Sector)
+                {
+                    if (IsPlayer(PlayerID))
+                    {
+                        ExOverlapped* ExOver{ new ExOverlapped{} };
+                        ExOver->Op = EnumOp::OVERLAP;
+                        ExOver->PlayerID = PlayerID;
+                        PostQueuedCompletionStatus(IOCP, 1, ObjectID, &ExOver->Over);
+                    }
+                }
 
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)

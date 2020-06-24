@@ -110,6 +110,7 @@ void SetSector(int ObjectID, int NewPosX, int NewPosY);
 
 int API_GetX(lua_State* L);
 int API_GetY(lua_State* L);
+int API_IsDead(lua_State* L);
 int API_TakeDamage(lua_State* L);
 
 void Send_Packet(int UserID, void* BufPointer);
