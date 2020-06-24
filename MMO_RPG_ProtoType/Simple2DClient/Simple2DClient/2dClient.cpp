@@ -85,12 +85,8 @@ public:
 		g_window->draw(m_sprite);
 		m_name.setPosition(rx - 10, ry - 30);
 		g_window->draw(m_name);
-	}
-	void draw_UI()
-	{
-		float rx = (PosX - g_left_x) * 65.0f + 8;
-		float ry = (PosY - g_top_y) * 65.0f + 8;
 
+		// chat
 		if (isInputtingChat)
 		{
 			g_window->draw(m_chat_headText);
@@ -106,9 +102,13 @@ public:
 			m_text.setPosition(rx - 10, ry + 15);
 			g_window->draw(m_text);
 		}
+	}
+	void draw_UI()
+	{
+		set_UI("Level: " + to_string(Level), 
+			"Exp: " + to_string(Exp) + " / " + to_string(static_cast<int>(100 * pow(2, Level - 1))), 
+			"HP: " + to_string(HP));
 
-		set_UI("Level: " + to_string(Level), "Exp: " +
-			to_string(Exp) + " / " + to_string(static_cast<int>(100 * pow(2, Level - 1))), "HP: " + to_string(HP));
 		for (int i = 0; i < 3; ++i) g_window->draw(UI[i]);
 	}
 	void set_name(char str[]) {
@@ -333,7 +333,7 @@ void ProcessPacket(char* ptr)
 		SC_Packet_Data* my_packet = reinterpret_cast<SC_Packet_Data*>(ptr);
 		int Data{ my_packet->Data };
 
-		avatar.Exp = Data;
+		avatar.HP = Data;
 	}
 	break;
 	default:
@@ -405,8 +405,8 @@ void client_main()
 				black_tile.a_draw();
 			}
 		}
-	avatar.draw();
 	avatar.draw_UI();
+	avatar.draw();
 	for (auto& npc : npcs) npc.second.draw();
 	sf::Text text;
 	text.setFont(g_font);

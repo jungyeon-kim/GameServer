@@ -5,6 +5,33 @@ void InitClients()
     for (int i = 0; i < MAX_USER_COUNT; ++i) Clients[i].ID = i;
 }
 
+void ResetClient(int UserID)
+{
+    Clients[UserID].PosX = 100;
+    Clients[UserID].PosY = 100;
+
+    // 기존 장소 Leave
+    for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
+        for (auto& ObjectID : Sector)
+        {
+            if (!IsPlayer(ObjectID) || ObjectID == UserID) continue;
+            Send_Packet_Leave(ObjectID, UserID);
+        }
+    Send_Packet_Move(UserID, UserID);
+    Send_Packet_Data(UserID, SC_EXP, Clients[UserID].Exp /= 2);
+    Send_Packet_Data(UserID, SC_HP, Clients[UserID].HP = 100);
+
+    // 초기 장소 Enter
+    SetSector(UserID, Clients[UserID].PosX, Clients[UserID].PosY);
+    for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
+        for (auto& ObjectID : Sector)
+        {
+            if (!IsPlayer(ObjectID) || ObjectID == UserID) continue;
+            Send_Packet_Enter(ObjectID, UserID);
+            Send_Packet_Enter(UserID, ObjectID);
+        }
+}
+
 void InitNPCs()
 {
     for (int i = NPC_ID_START; i < NPC_ID_START + MAX_NPC_COUNT; ++i)
@@ -15,7 +42,7 @@ void InitNPCs()
         Clients[i].Status = ClientStat::SLEEP;
         Clients[i].PosX = rand() % WORLD_WIDTH;
         Clients[i].PosY = rand() % WORLD_HEIGHT;
-        Clients[i].Level = rand() % 20;
+        Clients[i].Level = rand() % 19 + 1;
         Clients[i].HP = 100;
 
         // 섹터 배정
@@ -25,14 +52,14 @@ void InitNPCs()
         luaL_openlibs(L);
         luaL_loadfile(L, "NPC.LUA");
         lua_pcall(L, 0, 0, 0);
-        lua_getglobal(L, "SetID");   // 함수를 push
-        lua_pushnumber(L, i);      // SetID함수의 인자 push
+        lua_getglobal(L, "SetID");  // 함수를 push
+        lua_pushnumber(L, i);       // SetID함수의 인자 push
         lua_pcall(L, 1, 0, 0);      // 스택에는 리턴값만 남게됨
-        lua_pop(L, 1);            // 리턴값 pop
+        lua_pop(L, 1);              // 리턴값 pop
         // lua에 함수 등록
         lua_register(L, "API_GetX", API_GetX);
         lua_register(L, "API_GetY", API_GetY);
-        lua_register(L, "API_SendMsg", API_SendMsg);
+        lua_register(L, "API_TakeDamage", API_TakeDamage);
 
     }
 }
@@ -144,12 +171,13 @@ int API_GetY(lua_State* L)
     return 1;
 }
 
-int API_SendMsg(lua_State* L)
+int API_TakeDamage(lua_State* L)
 {
-    int MyID{ (int)lua_tointeger(L, -3) };
     int UserID{ (int)lua_tointeger(L, -2) };
-    char* Msg{ (char*)lua_tostring(L, -1) };
-    //Send_Packet_Chat(UserID, MyID, Msg);
+    int Damage{ (int)lua_tointeger(L, -1) };
+    if (Clients[UserID].HP > 0) Send_Packet_Data(UserID, SC_HP, Clients[UserID].HP -= Damage);
+    if (Clients[UserID].HP < 0) Clients[UserID].HP = 0;
+    if (!Clients[UserID].HP) ResetClient(UserID);
     return 0;
 }
 
@@ -444,7 +472,7 @@ void ProcessPacket(int UserID, char* Buf)
                     if (Clients[ObjectID].Status == ClientStat::SLEEP) ActivateNPC(ObjectID);
 
                     ExOverlapped* ExOver{ new ExOverlapped{} };
-                    ExOver->Op = EnumOp::PLAYER_MOVE;
+                    ExOver->Op = EnumOp::OVERLAP;
                     ExOver->PlayerID = UserID;
                     PostQueuedCompletionStatus(IOCP, 1, ObjectID, &ExOver->Over);
                 }
@@ -527,8 +555,9 @@ void ProcessPacket(int UserID, char* Buf)
             {
                 if (IsNear(UserID, VisibleObject, 1) && Clients[VisibleObject].Status != ClientStat::DEAD)
                 {
-                    Clients[VisibleObject].HP -= 20;
+                    if (Clients[VisibleObject].HP > 0) Clients[VisibleObject].HP -= 20;
                     if (Clients[VisibleObject].HP < 0) Clients[VisibleObject].HP = 0;
+
                     if (!Clients[VisibleObject].HP) // 적 사망시
                     {
                         Clients[VisibleObject].Status = ClientStat::DEAD;
@@ -730,16 +759,16 @@ void WorkerThread()
             delete ExOver;
             break;
         }
-        case EnumOp::PLAYER_MOVE:
+        case EnumOp::OVERLAP:
         {
             Clients[ObjectID].LuaMutex.lock();
             lua_State* L{ Clients[ObjectID].L };
             lua_getglobal(L, "BeginOverlap");
             lua_pushnumber(L, ExOver->PlayerID);
             int Error{ lua_pcall(L, 1, 0, 0) };
-            #if defined(_DEBUG)
-            if (Error) cout << lua_tostring(L, -1) << endl;
-            #endif
+            //#if defined(_DEBUG)
+            //if (Error) cout << lua_tostring(L, -1) << endl;
+            //#endif
             // EventPlayerMove은 리턴값이 없으므로 pop할게 없다. (lua_pcall()에서 모두 pop되기 때문)
             Clients[ObjectID].LuaMutex.unlock();
 

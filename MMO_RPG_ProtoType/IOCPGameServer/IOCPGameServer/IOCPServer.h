@@ -32,7 +32,7 @@ using namespace chrono;
 constexpr int VIEW_RANGE{ 8 }; 
 constexpr int NumOfSector{ (WORLD_WIDTH / SECTOR_WIDTH) * (WORLD_HEIGHT / SECTOR_HEIGHT) };
 
-enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, PLAYER_MOVE, RESPAWN };
+enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, OVERLAP, RESPAWN };
 enum class ClientStat { FREE, ALLOCATED, ACTIVE, SLEEP, DEAD };
 
 struct ExOverlapped
@@ -95,6 +95,7 @@ mutex TimerLock{}, SectorLock{};
 Client Clients[NPC_ID_START + MAX_NPC_COUNT]{};
 
 void InitClients();
+void ResetClient(int UserID);
 void InitNPCs();
 void Disconnect(int UserID);
 
@@ -109,7 +110,7 @@ void SetSector(int ObjectID, int NewPosX, int NewPosY);
 
 int API_GetX(lua_State* L);
 int API_GetY(lua_State* L);
-int API_SendMsg(lua_State* L);
+int API_TakeDamage(lua_State* L);
 
 void Send_Packet(int UserID, void* BufPointer);
 void Send_Packet_Log(int UserID, char Msg[]);
