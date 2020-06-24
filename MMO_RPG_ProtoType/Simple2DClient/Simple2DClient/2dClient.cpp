@@ -41,10 +41,11 @@ private:
 
 public:
 	int PosX, PosY, Level, Exp, HP;
-	bool isAttacking{};
+	bool isMoving{}, isAttacking{};
 	bool isInputtingChat{};
 	char Name[MAX_ID_LEN];
 	sf::String m_input;
+	high_resolution_clock::time_point move_timer{}, attack_timer{};
 
 	OBJECT(sf::Texture& t, int PosX, int PosY, int x2, int y2) {
 		m_showing = false;
@@ -76,6 +77,10 @@ public:
 	void move(int NewPosX, int NewPosY) {
 		PosX = NewPosX;
 		PosY = NewPosY;
+	}
+	void update() {
+		if (high_resolution_clock::now() - attack_timer > 0.5s) isAttacking = false;
+		if (high_resolution_clock::now() - move_timer > 0.05s) isMoving = false;
 	}
 	void draw() {
 		if (false == m_showing) return;
@@ -405,6 +410,7 @@ void client_main()
 				black_tile.a_draw();
 			}
 		}
+	avatar.update();
 	avatar.draw_UI();
 	avatar.draw();
 	for (auto& npc : npcs) npc.second.draw();
@@ -566,7 +572,6 @@ int main()
 				{
 					avatar.set_texture(*player, 0, 0, 64, 64);
 					send_attack_packet(CS_ATTACK_END);
-					avatar.isAttacking = false;
 				}
 			if (event.type == sf::Event::KeyPressed) {
 				int p_type = -1;
@@ -587,16 +592,36 @@ int main()
 					break;
 				}
 				case sf::Keyboard::Left:
-					send_move_packet(D_LEFT);
+					if (!avatar.isMoving)
+					{
+						send_move_packet(D_LEFT);
+						avatar.isMoving = true;
+						avatar.move_timer = high_resolution_clock::now();
+					}
 					break;
 				case sf::Keyboard::Right:
-					send_move_packet(D_RIGHT);
+					if (!avatar.isMoving)
+					{
+						send_move_packet(D_RIGHT);
+						avatar.isMoving = true;
+						avatar.move_timer = high_resolution_clock::now();
+					}
 					break;
 				case sf::Keyboard::Up:
-					send_move_packet(D_UP);
+					if(!avatar.isMoving)
+					{
+						send_move_packet(D_UP);
+						avatar.isMoving = true;
+						avatar.move_timer = high_resolution_clock::now();
+					}
 					break;
 				case sf::Keyboard::Down:
-					send_move_packet(D_DOWN);
+					if (!avatar.isMoving)
+					{
+						send_move_packet(D_DOWN);
+						avatar.isMoving = true;
+						avatar.move_timer = high_resolution_clock::now();
+					}
 					break;
 				case sf::Keyboard::Space:
 					if (!avatar.isAttacking)
@@ -604,6 +629,7 @@ int main()
 						avatar.set_texture(*player, 384, 0, 64, 64);
 						send_attack_packet(CS_ATTACK_START);
 						avatar.isAttacking = true;
+						avatar.attack_timer = high_resolution_clock::now();
 					}
 					break;
 				case sf::Keyboard::Escape:
