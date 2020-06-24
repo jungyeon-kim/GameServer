@@ -45,6 +45,7 @@ struct SC_Packet_Log
 	char Size{};
 	char Type{};
 	char Msg[MAX_STR_LEN]{};
+	char IsInGame{};
 };
 
 struct SC_Packet_Login_OK 

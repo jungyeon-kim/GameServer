@@ -103,10 +103,7 @@ public:
 			g_window->draw(m_chat_text);
 			if (m_input.getSize()) m_input.clear();
 		}
-		if (high_resolution_clock::now() < m_time_out) {
-			m_text.setPosition(rx - 10, ry + 15);
-			g_window->draw(m_text);
-		}
+		if (high_resolution_clock::now() < m_time_out) g_window->draw(m_text);
 	}
 	void draw_UI()
 	{
@@ -125,12 +122,16 @@ public:
 	void add_text(const char* chat) {
 		m_text.setFont(g_font);
 		m_text.setString(chat);
-		m_time_out = high_resolution_clock::now() + 1s;
+		m_text.setPosition(10, 1200);
+		m_text.setFillColor(sf::Color(0, 50, 0));
+		m_text.setStyle(sf::Text::Bold);
+		m_text.setCharacterSize(50);
+		m_time_out = high_resolution_clock::now() + 3s;
 	}
 	void add_chat_text(const char* chat) {
 		m_chat_text.setFont(g_font);
 		m_chat_text.setString(chat);
-		m_chat_text.setPosition(160, WINDOW_HEIGHT * 2 - 70);
+		m_chat_text.setPosition(170, WINDOW_HEIGHT * 2 - 70);
 		m_chat_text.setFillColor(sf::Color(0, 0, 0));
 		m_chat_text.setStyle(sf::Text::Bold);
 		m_chat_text.setCharacterSize(50);
@@ -139,7 +140,7 @@ public:
 	void add_chat_headText(const char* chat) {
 		m_chat_headText.setFont(g_font);
 		m_chat_headText.setString(chat);
-		m_chat_headText.setPosition(0, WINDOW_HEIGHT * 2 - 70);
+		m_chat_headText.setPosition(10, WINDOW_HEIGHT * 2 - 70);
 		m_chat_headText.setFillColor(sf::Color(20, 20, 20));
 		m_chat_headText.setStyle(sf::Text::Bold);
 		m_chat_headText.setCharacterSize(50);
@@ -207,7 +208,8 @@ void ProcessPacket(char* ptr)
 	case SC_LOG:
 	{
 		SC_Packet_Log* my_packet = reinterpret_cast<SC_Packet_Log*>(ptr);
-		cout << my_packet->Msg << endl;
+		if (my_packet->IsInGame) avatar.add_text(my_packet->Msg);
+		else cout << my_packet->Msg << endl;
 		break;
 	}
 	case SC_LOGIN_OK:

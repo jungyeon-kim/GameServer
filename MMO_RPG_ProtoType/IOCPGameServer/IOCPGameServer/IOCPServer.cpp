@@ -19,7 +19,7 @@ void ResetClient(int UserID)
         }
     Send_Packet_Move(UserID, UserID);
     Send_Packet_Data(UserID, SC_EXP, Clients[UserID].Exp /= 2);
-    Send_Packet_Data(UserID, SC_HP, Clients[UserID].HP = 100);
+    Send_Packet_Data(UserID, SC_HP, Clients[UserID].HP = Clients[UserID].MaxHP);
 
     // 초기 장소 Enter
     SetSector(UserID, Clients[UserID].PosX, Clients[UserID].PosY);
@@ -182,9 +182,16 @@ int API_IsDead(lua_State* L)
 
 int API_TakeDamage(lua_State* L)
 {
-    int UserID{ (int)lua_tointeger(L, -2) };
+    int UserID{ (int)lua_tointeger(L, -3) };
+    int NPCID{ (int)lua_tointeger(L, -2) };
     int Damage{ (int)lua_tointeger(L, -1) };
-    if (Clients[UserID].HP > 0) Send_Packet_Data(UserID, SC_HP, Clients[UserID].HP -= Damage);
+    if (Clients[UserID].HP > 0)
+    {
+        Send_Packet_Data(UserID, SC_HP, Clients[UserID].HP -= Damage);
+        string Msg{ static_cast<string>(Clients[NPCID].Name)
+            + " was attacked with " + to_string(Damage) + " damage." };
+        Send_Packet_Log(UserID, Msg.c_str(), 1);
+    }
     if (Clients[UserID].HP < 0) Clients[UserID].HP = 0;
     if (!Clients[UserID].HP) ResetClient(UserID);
     return 0;
@@ -203,13 +210,14 @@ void Send_Packet(int UserID, void* BufPointer)
     WSASend(Clients[UserID].Socket, &ExOver->WSABuf, 1, NULL, 0, &ExOver->Over, NULL);
 }
 
-void Send_Packet_Log(int UserID, char Msg[])
+void Send_Packet_Log(int UserID, const char* Msg, char IsInGame)
 {
     SC_Packet_Log Packet{};
 
     Packet.Size = sizeof(Packet);
     Packet.Type = SC_LOG;
     strcpy_s(Packet.Msg, Msg);
+    Packet.IsInGame = IsInGame;
 
     Send_Packet(UserID, &Packet);
 }
@@ -416,6 +424,8 @@ void ProcessPacket(int UserID, char* Buf)
             Clients[UserID].Level, Clients[UserID].Exp, Clients[UserID].HP);
         // 섹터 배정
         SetSector(UserID, Clients[UserID].PosX, Clients[UserID].PosY);
+        // 일정시간마다 HP 회복
+        AddTimerQueue(UserID, EnumOp::RECOVERY, 5000);
 
         Send_Packet_Login_Ok(UserID);
 
@@ -567,12 +577,18 @@ void ProcessPacket(int UserID, char* Buf)
                     if (Clients[VisibleObject].HP > 0) Clients[VisibleObject].HP -= 20;
                     if (Clients[VisibleObject].HP < 0) Clients[VisibleObject].HP = 0;
 
+                    string Msg{ "Player hit " + static_cast<string>(Clients[VisibleObject].Name) + " dealing 20 damage." };
+                    Send_Packet_Log(UserID, Msg.c_str(), 1);
+
                     if (!Clients[VisibleObject].HP) // 적 사망시
                     {
                         Clients[VisibleObject].Status = ClientStat::DEAD;
 
                         // 경험치 획득
                         Send_Packet_Data(UserID, SC_EXP, Clients[UserID].Exp += Clients[VisibleObject].Level * 5);
+                        string Msg{ "Player Killed " + static_cast<string>(Clients[VisibleObject].Name) 
+                            + " to gain " + to_string(Clients[VisibleObject].Level * 5) + " exp." };
+                        Send_Packet_Log(UserID, Msg.c_str(), 1);
                         // 레벨업
                         if (Clients[UserID].Exp >= 100 * pow(2, Clients[UserID].Level - 1))
                         {
@@ -813,6 +829,17 @@ void WorkerThread()
             if (IsInPlayerView) ActivateNPC(ObjectID);
             break;
         }
+        case EnumOp::RECOVERY:
+        {
+            short& RecoveredHP{ Clients[ObjectID].HP };
+
+            if (Clients[ObjectID].HP < Clients[ObjectID].MaxHP) RecoveredHP += Clients[ObjectID].MaxHP / 10;
+            if (Clients[ObjectID].HP > Clients[ObjectID].MaxHP) RecoveredHP = Clients[ObjectID].MaxHP;
+            Send_Packet_Data(ObjectID, SC_HP, RecoveredHP);
+
+            AddTimerQueue(ObjectID, ExOver->Op, 5000);
+            break;
+        }
         default:
             cout << "Unknown EnumOp." << endl;
             while (true);
@@ -838,13 +865,8 @@ void TimerThread()
             switch (Event.Op)
             {
             case EnumOp::RANDOM_MOVE:
-            {
-                ExOverlapped* ExOver{ new ExOverlapped{} };
-                ExOver->Op = Event.Op;
-                PostQueuedCompletionStatus(IOCP, 1, Event.ObjectID, &ExOver->Over);
-                break;
-            }
             case EnumOp::RESPAWN:
+            case EnumOp::RECOVERY:
             {
                 ExOverlapped* ExOver{ new ExOverlapped{} };
                 ExOver->Op = Event.Op;
