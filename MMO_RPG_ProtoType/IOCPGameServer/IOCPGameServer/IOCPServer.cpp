@@ -18,8 +18,8 @@ void ResetClient(int UserID)
             Send_Packet_Leave(ObjectID, UserID);
         }
     Send_Packet_Move(UserID, UserID);
-    Send_Packet_Data(UserID, SC_EXP, Clients[UserID].Exp /= 2);
-    Send_Packet_Data(UserID, SC_HP, Clients[UserID].HP = Clients[UserID].MaxHP);
+    Send_Packet_Data(UserID, UserID, SC_EXP, Clients[UserID].Exp /= 2);
+    Send_Packet_Data(UserID, UserID, SC_HP, Clients[UserID].HP = Clients[UserID].MaxHP);
 
     // 초기 장소 Enter
     SetSector(UserID, Clients[UserID].PosX, Clients[UserID].PosY);
@@ -43,7 +43,8 @@ void InitNPCs()
         Clients[i].PosX = rand() % WORLD_WIDTH;
         Clients[i].PosY = rand() % WORLD_HEIGHT;
         Clients[i].Level = rand() % 19 + 1;
-        Clients[i].HP = 100;
+        Clients[i].MaxHP = Clients[i].Level * 10;
+        Clients[i].HP = Clients[i].MaxHP;
 
         // 섹터 배정
         SetSector(i, Clients[i].PosX, Clients[i].PosY);
@@ -187,7 +188,12 @@ int API_TakeDamage(lua_State* L)
     int Damage{ (int)lua_tointeger(L, -1) };
     if (Clients[UserID].HP > 0)
     {
-        Send_Packet_Data(UserID, SC_HP, Clients[UserID].HP -= Damage);
+        short CurrentHP{ Clients[UserID].HP -= Damage };
+        for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
+            for (auto& PlayerID : Sector)
+                if (IsPlayer(PlayerID))
+                    Send_Packet_Data(PlayerID, UserID, SC_HP, CurrentHP);
+
         string Msg{ static_cast<string>(Clients[NPCID].Name)
             + " was attacked with " + to_string(Damage) + " damage." };
         Send_Packet_Log(UserID, Msg.c_str(), 1);
@@ -245,6 +251,8 @@ void Send_Packet_Enter(int UserID, int OtherObjectID)
     Packet.Size = sizeof(Packet);
     Packet.Type = SC_ENTER;
     Packet.ID = OtherObjectID;
+    Packet.Level = Clients[OtherObjectID].Level;
+    Packet.HP = Clients[OtherObjectID].HP;
     Packet.ObjectType = O_PLAYER;
     Packet.PosX = Clients[OtherObjectID].PosX;
     Packet.PosY = Clients[OtherObjectID].PosY;
@@ -320,12 +328,13 @@ void Send_Packet_DeadorAlive(int UserID, int OtherUserID, char Type)
     Send_Packet(UserID, &Packet);
 }
 
-void Send_Packet_Data(int UserID, char Type, short Data)
+void Send_Packet_Data(int UserID, int OtherObjectID, char Type, short Data)
 {
     SC_Packet_Data Packet{};
 
     Packet.Size = sizeof(Packet);
     Packet.Type = Type;
+    Packet.ID = OtherObjectID;
     Packet.Data = Data;
 
     Send_Packet(UserID, &Packet);
@@ -576,6 +585,10 @@ void ProcessPacket(int UserID, char* Buf)
                 {
                     if (Clients[VisibleObject].HP > 0) Clients[VisibleObject].HP -= 20;
                     if (Clients[VisibleObject].HP < 0) Clients[VisibleObject].HP = 0;
+                    for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
+                        for (auto& PlayerID : Sector)
+                            if (IsPlayer(PlayerID))
+                                Send_Packet_Data(PlayerID, VisibleObject, SC_HP, Clients[VisibleObject].HP);
 
                     string Msg{ "Player hit " + static_cast<string>(Clients[VisibleObject].Name) + " dealing 20 damage." };
                     Send_Packet_Log(UserID, Msg.c_str(), 1);
@@ -585,24 +598,29 @@ void ProcessPacket(int UserID, char* Buf)
                         Clients[VisibleObject].Status = ClientStat::DEAD;
 
                         // 경험치 획득
-                        Send_Packet_Data(UserID, SC_EXP, Clients[UserID].Exp += Clients[VisibleObject].Level * 5);
+                        Send_Packet_Data(UserID, UserID, SC_EXP, Clients[UserID].Exp += Clients[VisibleObject].Level * 5);
                         string Msg{ "Player Killed " + static_cast<string>(Clients[VisibleObject].Name) 
                             + " to gain " + to_string(Clients[VisibleObject].Level * 5) + " exp." };
                         Send_Packet_Log(UserID, Msg.c_str(), 1);
                         // 레벨업
                         if (Clients[UserID].Exp >= 100 * pow(2, Clients[UserID].Level - 1))
                         {
-                            Send_Packet_Data(UserID, SC_LEVEL, Clients[UserID].Level += 1);
-                            Send_Packet_Data(UserID, SC_EXP, Clients[UserID].Exp = 0);
-                        }
+                            short CurrentLevel{ Clients[UserID].Level += 1 };
 
+                            Send_Packet_Data(UserID, UserID, SC_EXP, Clients[UserID].Exp = 0);
+                            for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
+                                for (auto& PlayerID : Sector)
+                                    if (IsPlayer(PlayerID))
+                                        Send_Packet_Data(PlayerID, UserID, SC_LEVEL, CurrentLevel);
+                        }
+                        // 주변 플레이어에게 적이 사망했음을 알리고 적을 리스폰 타이머큐에 추가
                         for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
                             for (auto& PlayerID : Sector)
                             {
                                 if (!IsPlayer(PlayerID)) continue;
                                 Send_Packet_DeadorAlive(PlayerID, VisibleObject, SC_DEAD);
-                                AddTimerQueue(VisibleObject, EnumOp::RESPAWN, 5000);
                             }
+                        AddTimerQueue(VisibleObject, EnumOp::RESPAWN, 5000);
                     }
                 }
                 continue;
@@ -822,10 +840,11 @@ void WorkerThread()
                     if (!IsPlayer(PlayerID)) continue;
                     if (!IsInPlayerView) IsInPlayerView = true;
                     Send_Packet_DeadorAlive(PlayerID, ObjectID, SC_RESPAWN);
+                    Send_Packet_Data(PlayerID, ObjectID, SC_HP, Clients[ObjectID].MaxHP);
                 }
 
             Clients[ObjectID].Status = ClientStat::SLEEP;
-            Clients[ObjectID].HP = 100;
+            Clients[ObjectID].HP = Clients[ObjectID].MaxHP;
             if (IsInPlayerView) ActivateNPC(ObjectID);
             break;
         }
@@ -835,7 +854,11 @@ void WorkerThread()
 
             if (Clients[ObjectID].HP < Clients[ObjectID].MaxHP) RecoveredHP += Clients[ObjectID].MaxHP / 10;
             if (Clients[ObjectID].HP > Clients[ObjectID].MaxHP) RecoveredHP = Clients[ObjectID].MaxHP;
-            Send_Packet_Data(ObjectID, SC_HP, RecoveredHP);
+            for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
+                for (auto& PlayerID : Sector)
+                    if(IsPlayer(PlayerID))
+                        Send_Packet_Data(PlayerID, ObjectID, SC_HP, RecoveredHP);
+
 
             AddTimerQueue(ObjectID, ExOver->Op, 5000);
             break;

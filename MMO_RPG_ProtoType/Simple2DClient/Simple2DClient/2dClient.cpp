@@ -37,7 +37,7 @@ private:
 	high_resolution_clock::time_point m_time_out, m_chat_timeOut{ high_resolution_clock::now() };
 	sf::Text m_text, m_chat_text, m_chat_headText;
 	sf::Text UI[3];
-	sf::Text m_name;
+	sf::Text m_name, m_level, m_hp;
 
 public:
 	int PosX, PosY, Level, Exp, HP;
@@ -90,6 +90,10 @@ public:
 		g_window->draw(m_sprite);
 		m_name.setPosition(rx - 10, ry - 30);
 		g_window->draw(m_name);
+		m_level.setPosition(rx - 50, ry - 30);
+		g_window->draw(m_level);
+		m_hp.setPosition(rx - 10, ry - 70);
+		g_window->draw(m_hp);
 
 		// chat
 		if (isInputtingChat)
@@ -99,7 +103,7 @@ public:
 		}
 		else if (high_resolution_clock::now() < m_chat_timeOut)
 		{
-			m_chat_text.setPosition(rx - 10, ry - 80);
+			m_chat_text.setPosition(rx - 10, ry - 120);
 			g_window->draw(m_chat_text);
 			if (m_input.getSize()) m_input.clear();
 		}
@@ -113,11 +117,23 @@ public:
 
 		for (int i = 0; i < 3; ++i) g_window->draw(UI[i]);
 	}
-	void set_name(char str[]) {
+	void set_name(char name[]) {
 		m_name.setFont(g_font);
-		m_name.setString(str);
+		m_name.setString(name);
 		m_name.setFillColor(sf::Color(255, 255, 255));
 		m_name.setStyle(sf::Text::Bold);
+	}
+	void set_level(string level) {
+		m_level.setFont(g_font);
+		m_level.setString(level);
+		m_level.setFillColor(sf::Color(255, 255, 50));
+		m_level.setStyle(sf::Text::Bold);
+	}
+	void set_hp(string hp) {
+		m_hp.setFont(g_font);
+		m_hp.setString(hp);
+		m_hp.setFillColor(sf::Color(255, 0, 0));
+		m_hp.setStyle(sf::Text::Bold);
 	}
 	void add_text(const char* chat) {
 		m_text.setFont(g_font);
@@ -244,6 +260,8 @@ void ProcessPacket(char* ptr)
 				npcs[ID] = OBJECT{ *wolf, 0, 0, 64, 64 };
 			strcpy_s(npcs[ID].Name, my_packet->Name);
 			npcs[ID].set_name(my_packet->Name);
+			npcs[ID].set_level(to_string(my_packet->Level));
+			npcs[ID].set_hp(to_string(my_packet->HP));
 			npcs[ID].move(my_packet->PosX, my_packet->PosY);
 			npcs[ID].show();
 		}
@@ -322,25 +340,30 @@ void ProcessPacket(char* ptr)
 	case SC_LEVEL:
 	{
 		SC_Packet_Data* my_packet = reinterpret_cast<SC_Packet_Data*>(ptr);
+		int ID{ my_packet->ID };
 		int Data{ my_packet->Data };
 
-		avatar.Level = Data;
+		if (ID == g_myid) avatar.Level = Data;
+		else npcs[ID].set_level(to_string(Data));
 	}
 	break;
 	case SC_EXP:
 	{
 		SC_Packet_Data* my_packet = reinterpret_cast<SC_Packet_Data*>(ptr);
+		int ID{ my_packet->ID };
 		int Data{ my_packet->Data };
 
-		avatar.Exp = Data;
+		if (ID == g_myid) avatar.Exp = Data;
 	}
 	break;
 	case SC_HP:
 	{
 		SC_Packet_Data* my_packet = reinterpret_cast<SC_Packet_Data*>(ptr);
+		int ID{ my_packet->ID };
 		int Data{ my_packet->Data };
 
-		avatar.HP = Data;
+		if (ID == g_myid) avatar.HP = Data;
+		else npcs[ID].set_hp(to_string(Data));
 	}
 	break;
 	default:

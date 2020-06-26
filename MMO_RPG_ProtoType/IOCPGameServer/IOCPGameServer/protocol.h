@@ -77,6 +77,7 @@ struct SC_Packet_Enter
 	char Type{};
 	int ID{};
 	char Name[MAX_ID_LEN]{};
+	short Level{}, HP{};
 	char ObjectType{};
 	short PosX{}, PosY{};
 };
@@ -114,6 +115,7 @@ struct SC_Packet_Data
 {
 	char Size{};
 	char Type{};
+	int ID{};
 	short Data{};
 };
 
