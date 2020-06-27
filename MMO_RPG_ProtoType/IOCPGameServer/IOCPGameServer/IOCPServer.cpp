@@ -1,4 +1,5 @@
 #include "IOCPServer.h"
+#include <fstream>
 
 void InitClients()
 {
@@ -30,6 +31,15 @@ void ResetClient(int UserID)
             Send_Packet_Enter(ObjectID, UserID);
             Send_Packet_Enter(UserID, ObjectID);
         }
+}
+
+void InitTiles()
+{
+    ifstream In{ "TileData.txt", ios_base::binary };
+
+    for (int i = 0; i < WORLD_WIDTH; ++i)
+        for (int j = 0; j < WORLD_HEIGHT; ++j)
+            Tiles[i][j] = In.get() - static_cast<char>('0');
 }
 
 void InitNPCs()
@@ -121,10 +131,10 @@ int GetSectorIdx(int PosX, int PosY)
 
 const vector<unordered_set<int>> GetNearSectors(int CurrentSectorIdx)
 {
+    SectorLock.lock();
     static int NumOfColumn{ WORLD_WIDTH / SECTOR_WIDTH };
     vector<unordered_set<int>> NearSectors{};
 
-    SectorLock.lock();
     for (int Column = -NumOfColumn - 1; Column < NumOfColumn; Column += NumOfColumn)
         for (int Row = Column; Row < Column + 3; ++Row)
             if (0 <= CurrentSectorIdx + Row && CurrentSectorIdx + Row < NumOfSector)
@@ -480,6 +490,8 @@ void ProcessPacket(int UserID, char* Buf)
             exit(-1);
         }
 
+        // 이동할 수 있는 곳인지 검사
+        if (Tiles[PosX][PosY] == 1) return;
         // 섹터 재배정
         SetSector(UserID, PosX, PosY);
 
@@ -605,7 +617,7 @@ void ProcessPacket(int UserID, char* Buf)
                         // 레벨업
                         if (Clients[UserID].Exp >= 100 * pow(2, Clients[UserID].Level - 1))
                         {
-                            short CurrentLevel{ Clients[UserID].Level += 1 };
+                            short CurrentLevel{ ++Clients[UserID].Level };
 
                             Send_Packet_Data(UserID, UserID, SC_EXP, Clients[UserID].Exp = 0);
                             for (auto& Sector : GetNearSectors(Clients[UserID].CurrentSector))
@@ -746,11 +758,15 @@ void WorkerThread()
             case 3:      if (PosX < WORLD_WIDTH - 1)    ++PosX;     break;
             }
 
-            // 섹터 재배정
-            SetSector(ObjectID, PosX, PosY);
+            // 이동할 수 있는 곳인지 검사
+            if (!Tiles[PosX][PosY])
+            {
+                // 섹터 재배정
+                SetSector(ObjectID, PosX, PosY);
 
-            Clients[ObjectID].PosX = PosX;
-            Clients[ObjectID].PosY = PosY;
+                Clients[ObjectID].PosX = PosX;
+                Clients[ObjectID].PosY = PosY;
+            }
 
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)
@@ -909,6 +925,10 @@ int main()
     cout << "Initializing NPC..." << endl;
     InitNPCs();
     cout << "NPC is Initialized!" << endl;
+
+    cout << "Initializing World..." << endl;
+    InitTiles();
+    cout << "World is Initialized!" << endl;
 
     ListenSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 

@@ -187,6 +187,7 @@ void CDBHandler::SetClientData(string ID, short& PosX, short& PosY, short& Level
                 {
                     PosX = rand() % WORLD_WIDTH;
                     PosY = rand() % WORLD_HEIGHT;
+                    HP = SHRT_MAX - 7;
                 }
                 else
                 {

@@ -93,9 +93,11 @@ array<unordered_set<int>, NumOfSector> Sectors{};
 mutex TimerLock{}, SectorLock{};
 
 Client Clients[NPC_ID_START + MAX_NPC_COUNT]{};
+int Tiles[WORLD_WIDTH][WORLD_HEIGHT]{};
 
 void InitClients();
 void ResetClient(int UserID);
+void InitTiles();
 void InitNPCs();
 void Disconnect(int UserID);
 

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <chrono>
+#include <fstream>
 
 using namespace std;
 using namespace chrono;
@@ -184,17 +185,26 @@ public:
 
 OBJECT avatar;
 unordered_map <int, OBJECT> npcs;
+int Tiles[WORLD_WIDTH][WORLD_HEIGHT]{};
 
 OBJECT white_tile;
 OBJECT black_tile;
+OBJECT rock_tile;
 
 sf::Texture* board;
+sf::Texture* rock;
 sf::Texture* player;
 sf::Texture* wolf;
 
 void client_initialize()
 {
+	ifstream In{ "TileData.txt", ios_base::binary };
+	for (int i = 0; i < WORLD_WIDTH; ++i)
+		for (int j = 0; j < WORLD_HEIGHT; ++j)
+			Tiles[i][j] = In.get() - static_cast<char>('0');
+
 	board = new sf::Texture;
+	rock = new sf::Texture;
 	player = new sf::Texture;
 	wolf = new sf::Texture;
 	if (false == g_font.loadFromFile("cour.ttf")) {
@@ -202,10 +212,12 @@ void client_initialize()
 		while (true);
 	}
 	board->loadFromFile("BG_Grass.png");
+	rock->loadFromFile("Rock.png");
 	player->loadFromFile("Player.png");
 	wolf->loadFromFile("Wolf.png");
 	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
+	rock_tile = OBJECT{ *rock, 0, 0, TILE_WIDTH, TILE_WIDTH };
 	avatar = OBJECT{ *player, 0, 0, 64, 64 };
 	avatar.move(4, 4);
 }
@@ -435,6 +447,19 @@ void client_main()
 				black_tile.a_draw();
 			}
 		}
+	for(int i = avatar.PosX - 10; i < avatar.PosX + 9; ++i)
+		for (int j = avatar.PosY - 10; j < avatar.PosY + 9; ++j)
+		{
+			if (i < 0 || j < 0) continue;
+
+			if (Tiles[i][j] == 1)
+			{
+				rock_tile.a_move((i - g_left_x) * 65.0f + 8, (j - g_top_y) * 65.0f + 8);
+				rock_tile.a_draw();
+			}
+		}
+	
+
 	avatar.update();
 	avatar.draw_UI();
 	avatar.draw();
