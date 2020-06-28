@@ -1,9 +1,14 @@
 #include "IOCPServer.h"
 #include <fstream>
+#include <map>
 
 void InitClients()
 {
-    for (int i = 0; i < MAX_USER_COUNT; ++i) Clients[i].ID = i;
+    for (int i = 0; i < MAX_USER_COUNT; ++i)
+    {
+        Clients[i].ID = i;
+        Clients[i].ObjectType = O_PLAYER;
+    }
 }
 
 void ResetClient(int UserID)
@@ -48,6 +53,8 @@ void InitNPCs()
     {
         Clients[i].Socket = 0;
         Clients[i].ID = i;
+        if (i % 2) Clients[i].ObjectType = O_WOLF;
+        else Clients[i].ObjectType = O_DEER;
         sprintf_s(Clients[i].Name, "NPC%d", i - NPC_ID_START);
         Clients[i].Status = ClientStat::SLEEP;
         Clients[i].PosX = rand() % WORLD_WIDTH;
@@ -64,9 +71,9 @@ void InitNPCs()
         luaL_loadfile(L, "NPC.LUA");
         lua_pcall(L, 0, 0, 0);
         lua_getglobal(L, "SetID");  // 함수를 push
-        lua_pushnumber(L, i);       // SetID함수의 인자 push
-        lua_pcall(L, 1, 0, 0);      // 스택에는 리턴값만 남게됨
-        lua_pop(L, 1);              // 리턴값 pop
+        lua_pushnumber(L, i);           // SetID함수의 인자 push
+        lua_pcall(L, 1, 0, 0);          // 스택에는 리턴값만 남게됨
+        lua_pop(L, 1);                  // 리턴값 pop
         // lua에 함수 등록
         lua_register(L, "API_GetX", API_GetX);
         lua_register(L, "API_GetY", API_GetY);
@@ -117,11 +124,22 @@ bool IsPlayer(int ObjectID)
     return ObjectID < NPC_ID_START;
 }
 
-void ActivateNPC(int NPCID)
+void ActivateNPC(int NPCID, int UserID)
 {
     ClientStat OldStat{ ClientStat::SLEEP };
+
     if (atomic_compare_exchange_strong(&Clients[NPCID].Status, &OldStat, ClientStat::ACTIVE))
-        AddTimerQueue(NPCID, EnumOp::RANDOM_MOVE, 1000);
+    {
+        switch (Clients[NPCID].ObjectType)
+        {
+        case O_WOLF:
+            AddTimerQueue(NPCID, EnumOp::RANDOM_MOVE, 1000);
+            break;
+        case O_DEER:
+            AddTimerQueue(NPCID, EnumOp::FIXED_MOVE, 1000);
+            break;
+        }
+    }
 }
 
 int GetSectorIdx(int PosX, int PosY)
@@ -131,15 +149,17 @@ int GetSectorIdx(int PosX, int PosY)
 
 const vector<unordered_set<int>> GetNearSectors(int CurrentSectorIdx)
 {
-    SectorLock.lock();
     static int NumOfColumn{ WORLD_WIDTH / SECTOR_WIDTH };
     vector<unordered_set<int>> NearSectors{};
 
     for (int Column = -NumOfColumn - 1; Column < NumOfColumn; Column += NumOfColumn)
         for (int Row = Column; Row < Column + 3; ++Row)
             if (0 <= CurrentSectorIdx + Row && CurrentSectorIdx + Row < NumOfSector)
+            {
+                SectorLock.lock();
                 NearSectors.emplace_back(Sectors[CurrentSectorIdx + Row]);
-    SectorLock.unlock();
+                SectorLock.unlock();
+            }
 
     return NearSectors;
 }
@@ -148,6 +168,9 @@ void SetSector(int ObjectID, int NewPosX, int NewPosY)
 {
     const int CurrentSector{ GetSectorIdx(NewPosX, NewPosY) };
 
+    if (CurrentSector < 0 || CurrentSector >= NumOfSector) return;
+
+    SectorLock.lock();
     if (Sectors[CurrentSector].find(ObjectID) == Sectors[CurrentSector].end())
     {
         if (NewPosX != Clients[ObjectID].PosX || NewPosY != Clients[ObjectID].PosY)
@@ -159,6 +182,7 @@ void SetSector(int ObjectID, int NewPosX, int NewPosY)
         Sectors[CurrentSector].emplace(ObjectID);
         Clients[ObjectID].CurrentSector = CurrentSector;
     }
+    SectorLock.unlock();
 }
 
 void AddTimerQueue(int ObjectID, EnumOp Op, int Duration)
@@ -167,6 +191,45 @@ void AddTimerQueue(int ObjectID, EnumOp Op, int Duration)
     Event Event{ ObjectID, Op, high_resolution_clock::now() + milliseconds{ Duration }, 0 };
     TimerQueue.push(Event);
     TimerLock.unlock();
+}
+
+float GetDistance(short LhsX, short LhsY, short RhsX, short RhsY)
+{
+    return sqrtf(pow(RhsX - LhsX, 2) + pow(RhsY - LhsY, 2));
+}
+
+const string GetNearestDir(int OwnerID, int TargetID)
+{
+    array<AStarSearchData, 4> SearchData{};
+
+    SearchData[0].Dir = "Up";
+    SearchData[0].PosX = Clients[OwnerID].PosX;
+    SearchData[0].PosY = Clients[OwnerID].PosY - 1;
+    SearchData[0].Distance = GetDistance(SearchData[0].PosX, SearchData[0].PosY, Clients[TargetID].PosX, Clients[TargetID].PosY);
+    SearchData[1].Dir = "Down";
+    SearchData[1].PosX = Clients[OwnerID].PosX;
+    SearchData[1].PosY = Clients[OwnerID].PosY + 1;
+    SearchData[1].Distance = GetDistance(SearchData[1].PosX, SearchData[1].PosY, Clients[TargetID].PosX, Clients[TargetID].PosY);
+    SearchData[2].Dir = "Left";
+    SearchData[2].PosX = Clients[OwnerID].PosX - 1;
+    SearchData[2].PosY = Clients[OwnerID].PosY;
+    SearchData[2].Distance = GetDistance(SearchData[2].PosX, SearchData[2].PosY, Clients[TargetID].PosX, Clients[TargetID].PosY);
+    SearchData[3].Dir = "Right";
+    SearchData[3].PosX = Clients[OwnerID].PosX + 1;
+    SearchData[3].PosY = Clients[OwnerID].PosY;
+    SearchData[3].Distance = GetDistance(SearchData[3].PosX, SearchData[3].PosY, Clients[TargetID].PosX, Clients[TargetID].PosY);
+
+    sort(SearchData.begin(), SearchData.end());
+
+    for (auto& Data : SearchData)
+    {
+        if ((Data.PosX == Clients[OwnerID].PrevPosX && Data.PosY == Clients[OwnerID].PrevPosY)
+            || Tiles[Data.PosX][Data.PosY]) continue;
+
+        return Data.Dir;
+    }
+
+    return "";
 }
 
 int API_GetX(lua_State* L)
@@ -209,7 +272,7 @@ int API_TakeDamage(lua_State* L)
         Send_Packet_Log(UserID, Msg.c_str(), 1);
     }
     if (Clients[UserID].HP < 0) Clients[UserID].HP = 0;
-    if (!Clients[UserID].HP) ResetClient(UserID);
+    if (!Clients[UserID].HP && strcmp(Clients[UserID].Name, "adminKJY")) ResetClient(UserID);
     return 0;
 }
 
@@ -263,7 +326,7 @@ void Send_Packet_Enter(int UserID, int OtherObjectID)
     Packet.ID = OtherObjectID;
     Packet.Level = Clients[OtherObjectID].Level;
     Packet.HP = Clients[OtherObjectID].HP;
-    Packet.ObjectType = O_PLAYER;
+    Packet.ObjectType = Clients[OtherObjectID].ObjectType;
     Packet.PosX = Clients[OtherObjectID].PosX;
     Packet.PosY = Clients[OtherObjectID].PosY;
     strcpy_s(Packet.Name, Clients[OtherObjectID].Name);
@@ -458,7 +521,7 @@ void ProcessPacket(int UserID, char* Buf)
                 if (IsNear(UserID, ObjectID, VIEW_RANGE))
                 {
                     //Clients[i].Mutex.lock();
-                    if (Clients[ObjectID].Status == ClientStat::SLEEP) ActivateNPC(ObjectID);
+                    if (Clients[ObjectID].Status == ClientStat::SLEEP) ActivateNPC(ObjectID, UserID);
                     if (Clients[ObjectID].Status == ClientStat::ACTIVE)
                     {
                         Send_Packet_Enter(UserID, ObjectID);
@@ -509,7 +572,7 @@ void ProcessPacket(int UserID, char* Buf)
                 if (!IsNear(UserID, ObjectID, VIEW_RANGE) || ObjectID == UserID) continue;
                 if (!IsPlayer(ObjectID))
                 {
-                    if (Clients[ObjectID].Status == ClientStat::SLEEP) ActivateNPC(ObjectID);
+                    if (Clients[ObjectID].Status == ClientStat::SLEEP) ActivateNPC(ObjectID, UserID);
 
                     ExOverlapped* ExOver{ new ExOverlapped{} };
                     ExOver->Op = EnumOp::OVERLAP;
@@ -745,6 +808,33 @@ void WorkerThread()
                 sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, NULL, &ExOver->Over);
             break;
         }
+        case EnumOp::FIXED_MOVE:
+        {
+            // NPC가 플레이어 근처에 있고 살아있다면 다시 타이머 큐에 넣고 그렇지 않다면 잠재운다.
+            bool IsInPlayerView{};
+            int UserID{};
+            for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
+                for (auto& PlayerID : Sector)
+                {
+                    if (!IsPlayer(Clients[PlayerID].ID)) continue;
+
+                    if (IsNear(PlayerID, ObjectID, VIEW_RANGE) && Clients[ObjectID].Status == ClientStat::ACTIVE)
+                    {
+                        IsInPlayerView = true;
+                        Clients[ObjectID].MoveTargetID = UserID = PlayerID;
+                        break;
+                    }
+                }
+            if (IsInPlayerView)
+            {
+                if (Clients[ObjectID].MaxHP == Clients[ObjectID].HP) AddTimerQueue(ObjectID, EnumOp::FIXED_MOVE, 1000);
+                else AddTimerQueue(ObjectID, EnumOp::TRACE_MOVE, 1000);
+            }
+            else if (Clients[ObjectID].Status != ClientStat::DEAD) Clients[ObjectID].Status = ClientStat::SLEEP;
+
+            delete ExOver;
+            break;
+        }
         case EnumOp::RANDOM_MOVE:
         {
             short PosX{ Clients[ObjectID].PosX };
@@ -810,7 +900,8 @@ void WorkerThread()
                 }
 
             // NPC가 플레이어 근처에 있고 살아있다면 다시 타이머 큐에 넣고 그렇지 않다면 잠재운다.
-            bool Flag{};
+            bool IsInPlayerView{};
+            int UserID{};
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)
                 {
@@ -818,11 +909,106 @@ void WorkerThread()
 
                     if (IsNear(PlayerID, ObjectID, VIEW_RANGE) && Clients[ObjectID].Status == ClientStat::ACTIVE)
                     {
-                        Flag = true;
+                        IsInPlayerView = true;
+                        Clients[ObjectID].MoveTargetID = UserID = PlayerID;
                         break;
                     }
                 }
-            if (Flag) AddTimerQueue(ObjectID, ExOver->Op, 1000);
+            if (IsInPlayerView)
+            {
+                if (!IsNear(UserID, ObjectID, 5)) AddTimerQueue(ObjectID, EnumOp::RANDOM_MOVE, 1000);
+                else AddTimerQueue(ObjectID, EnumOp::TRACE_MOVE, 1000);
+            }
+            else if (Clients[ObjectID].Status != ClientStat::DEAD) Clients[ObjectID].Status = ClientStat::SLEEP;
+
+            delete ExOver;
+            break;
+        }
+        case EnumOp::TRACE_MOVE:
+        {
+            short PosX{ Clients[ObjectID].PosX };
+            short PosY{ Clients[ObjectID].PosY };
+
+            // 에이스타 서치
+            const string& Dir{ GetNearestDir(ObjectID, Clients[ObjectID].MoveTargetID) };
+
+            if (Dir == "Up") --PosY;
+            else if (Dir == "Down") ++PosY;
+            else if (Dir == "Left") --PosX;
+            else if (Dir == "Right") ++PosX;
+
+            // 섹터 재배정
+            SetSector(ObjectID, PosX, PosY);
+
+            Clients[ObjectID].PrevPosX = Clients[ObjectID].PosX;
+            Clients[ObjectID].PrevPosY = Clients[ObjectID].PosY;
+            Clients[ObjectID].PosX = PosX;
+            Clients[ObjectID].PosY = PosY;
+
+            for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
+                for (auto& PlayerID : Sector)
+                    if (IsPlayer(PlayerID))
+                    {
+                        ExOverlapped* ExOver{ new ExOverlapped{} };
+                        ExOver->Op = EnumOp::OVERLAP;
+                        ExOver->PlayerID = PlayerID;
+                        PostQueuedCompletionStatus(IOCP, 1, ObjectID, &ExOver->Over);
+                    }
+
+            for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
+                for (auto& PlayerID : Sector)
+                {
+                    if (!IsPlayer(Clients[PlayerID].ID)) continue;
+
+                    if (IsNear(PlayerID, ObjectID, VIEW_RANGE))
+                    {
+                        Clients[PlayerID].Mutex.lock();
+                        if (Clients[PlayerID].ViewList.count(ObjectID))
+                        {
+                            Clients[PlayerID].Mutex.unlock();
+                            Send_Packet_Move(PlayerID, ObjectID);
+                        }
+                        else
+                        {
+                            Clients[PlayerID].Mutex.unlock();
+                            Send_Packet_Enter(PlayerID, ObjectID);
+                        }
+                    }
+                    else
+                    {
+                        Clients[PlayerID].Mutex.lock();
+                        if (Clients[PlayerID].ViewList.count(ObjectID))
+                        {
+                            Clients[PlayerID].Mutex.unlock();
+                            Send_Packet_Leave(PlayerID, ObjectID);
+                        }
+                        else Clients[PlayerID].Mutex.unlock();
+                    }
+                }
+
+            // NPC가 플레이어 근처에 있고 살아있다면 다시 타이머 큐에 넣고 그렇지 않다면 잠재운다.
+            bool IsInPlayerView{};
+            int UserID{};
+            for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
+                for (auto& PlayerID : Sector)
+                {
+                    if (!IsPlayer(Clients[PlayerID].ID)) continue;
+
+                    if (IsNear(PlayerID, ObjectID, VIEW_RANGE) && Clients[ObjectID].Status == ClientStat::ACTIVE)
+                    {
+                        IsInPlayerView = true;
+                        UserID = PlayerID;
+                        break;
+                    }
+                }
+            if (IsInPlayerView)
+            {
+                if (!IsNear(UserID, ObjectID, 5) && Clients[ObjectID].ObjectType == O_WOLF) 
+                    AddTimerQueue(ObjectID, EnumOp::RANDOM_MOVE, 1000);
+                else if (!IsNear(UserID, ObjectID, 5) && Clients[ObjectID].ObjectType == O_DEER)
+                    AddTimerQueue(ObjectID, EnumOp::FIXED_MOVE, 1000);
+                else AddTimerQueue(ObjectID, EnumOp::TRACE_MOVE, 1000);
+            }
             else if (Clients[ObjectID].Status != ClientStat::DEAD) Clients[ObjectID].Status = ClientStat::SLEEP;
 
             delete ExOver;
@@ -846,20 +1032,25 @@ void WorkerThread()
         }
         case EnumOp::RESPAWN:
         {
+            int UserID{};
             bool IsInPlayerView{};
 
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)
                 {
                     if (!IsPlayer(PlayerID)) continue;
-                    if (!IsInPlayerView) IsInPlayerView = true;
+                    if (!IsInPlayerView)
+                    {
+                        UserID = PlayerID;
+                        IsInPlayerView = true;
+                    }
                     Send_Packet_DeadorAlive(PlayerID, ObjectID, SC_RESPAWN);
                     Send_Packet_Data(PlayerID, ObjectID, SC_HP, Clients[ObjectID].MaxHP);
                 }
 
             Clients[ObjectID].Status = ClientStat::SLEEP;
             Clients[ObjectID].HP = Clients[ObjectID].MaxHP;
-            if (IsInPlayerView) ActivateNPC(ObjectID);
+            if (IsInPlayerView) ActivateNPC(ObjectID, UserID);
             break;
         }
         case EnumOp::RECOVERY:
@@ -899,18 +1090,10 @@ void TimerThread()
             TimerQueue.pop();
             TimerLock.unlock();
 
-            switch (Event.Op)
-            {
-            case EnumOp::RANDOM_MOVE:
-            case EnumOp::RESPAWN:
-            case EnumOp::RECOVERY:
-            {
-                ExOverlapped* ExOver{ new ExOverlapped{} };
-                ExOver->Op = Event.Op;
-                PostQueuedCompletionStatus(IOCP, 1, Event.ObjectID, &ExOver->Over);
-                break;
-            }
-            }
+            // WorkerThread에 이벤트 전달
+            ExOverlapped* ExOver{ new ExOverlapped{} };
+            ExOver->Op = Event.Op;
+            PostQueuedCompletionStatus(IOCP, 1, Event.ObjectID, &ExOver->Over);
         }
     }
 }

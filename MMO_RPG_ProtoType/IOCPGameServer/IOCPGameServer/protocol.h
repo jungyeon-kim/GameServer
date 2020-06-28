@@ -71,7 +71,8 @@ struct SC_Packet_Move
 };
 
 constexpr unsigned char O_PLAYER{ 0 };
-constexpr unsigned char O_NPC{ 1 };
+constexpr unsigned char O_WOLF{ 1 };
+constexpr unsigned char O_DEER{ 2 };
 
 struct SC_Packet_Enter 
 {

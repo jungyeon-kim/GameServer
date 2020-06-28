@@ -1,4 +1,4 @@
-MyID = 9999
+MyID = -1
 Damage = 20
 
 function SetID( NewID )

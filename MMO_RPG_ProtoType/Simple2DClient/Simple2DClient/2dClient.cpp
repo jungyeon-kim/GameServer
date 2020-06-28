@@ -195,6 +195,7 @@ sf::Texture* board;
 sf::Texture* rock;
 sf::Texture* player;
 sf::Texture* wolf;
+sf::Texture* deer;
 
 void client_initialize()
 {
@@ -207,6 +208,8 @@ void client_initialize()
 	rock = new sf::Texture;
 	player = new sf::Texture;
 	wolf = new sf::Texture;
+	deer = new sf::Texture;
+
 	if (false == g_font.loadFromFile("cour.ttf")) {
 		cout << "Font Loading Error!\n";
 		while (true);
@@ -215,6 +218,7 @@ void client_initialize()
 	rock->loadFromFile("Rock.png");
 	player->loadFromFile("Player.png");
 	wolf->loadFromFile("Wolf.png");
+	deer->loadFromFile("Deer.png");
 	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
 	rock_tile = OBJECT{ *rock, 0, 0, TILE_WIDTH, TILE_WIDTH };
@@ -225,7 +229,10 @@ void client_initialize()
 void client_finish()
 {
 	delete board;
+	delete rock;
+	delete player;
 	delete wolf;
+	delete deer;
 }
 
 void ProcessPacket(char* ptr)
@@ -269,7 +276,11 @@ void ProcessPacket(char* ptr)
 			if (ID < NPC_ID_START)
 				npcs[ID] = OBJECT{ *player, 64, 0, 64, 64 };
 			else
-				npcs[ID] = OBJECT{ *wolf, 0, 0, 64, 64 };
+			{
+				if (my_packet->ObjectType == O_WOLF) npcs[ID] = OBJECT{ *wolf, 0, 0, 64, 64 };
+				else if (my_packet->ObjectType == O_DEER) npcs[ID] = OBJECT{ *deer, 0, 0, 48, 60 };
+			}
+
 			strcpy_s(npcs[ID].Name, my_packet->Name);
 			npcs[ID].set_name(my_packet->Name);
 			npcs[ID].set_level(to_string(my_packet->Level));

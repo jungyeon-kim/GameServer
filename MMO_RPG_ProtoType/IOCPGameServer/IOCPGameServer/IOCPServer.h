@@ -31,7 +31,7 @@ using namespace chrono;
 
 constexpr int NumOfSector{ (WORLD_WIDTH / SECTOR_WIDTH) * (WORLD_HEIGHT / SECTOR_HEIGHT) };
 
-enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, OVERLAP, RESPAWN, RECOVERY };
+enum class EnumOp { RECV, SEND, ACCEPT, FIXED_MOVE, RANDOM_MOVE, TRACE_MOVE, OVERLAP, RESPAWN, RECOVERY };
 enum class ClientStat { FREE, ALLOCATED, ACTIVE, SLEEP, DEAD };
 
 struct ExOverlapped
@@ -59,9 +59,11 @@ struct Client
     unordered_set<int> ViewList{};      // 시야범위 내에 존재하는 클라이언트를 담기위한 자료구조
     int CurrentSector{ -1 };            // 현재 속해있는 섹터
 
+    char ObjectType{};
     char Name[MAX_ID_LEN + 1]{};
-    short PosX{}, PosY{};
+    short PosX{}, PosY{}, PrevPosX{}, PrevPosY{};
     short MaxHP{ 100 }, HP{}, Level{}, Exp{};
+    int MoveTargetID{};
 
     unsigned MoveTime{};
     high_resolution_clock::time_point LastMoveTime{};
@@ -80,6 +82,18 @@ struct Event
     constexpr bool operator>(const Event& rhs) const
     {
         return WakeUpTime > rhs.WakeUpTime;
+    }
+};
+
+struct AStarSearchData
+{
+    string Dir{};
+    short PosX{}, PosY{};
+    float Distance{};
+
+    constexpr bool operator<(const AStarSearchData& rhs)
+    {
+        return Distance < rhs.Distance;
     }
 };
 
@@ -102,8 +116,10 @@ void Disconnect(int UserID);
 
 bool IsNear(int UserID, int OtherObjectID, int Range);
 bool IsPlayer(int ObjectID);
-void ActivateNPC(int NPCID);
+void ActivateNPC(int NPCID, int UserID);
 void AddTimerQueue(int ObjectID, EnumOp Op, int Duration);
+float GetDistance(short LhsX, short LhsY, short RhsX, short RhsY);
+const string GetNearestDir(int OwnerID, int TargetID);
 
 int GetSectorIdx(int PosX, int PosY);
 const vector<unordered_set<int>> GetNearSectors(int CurrentSectorIdx);
