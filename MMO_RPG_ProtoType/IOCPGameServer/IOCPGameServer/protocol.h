@@ -11,6 +11,8 @@ constexpr int NPC_ID_START{ MAX_USER_COUNT };
 constexpr int SECTOR_WIDTH{ 20 };
 constexpr int SECTOR_HEIGHT{ 20 };
 
+constexpr int VIEW_RANGE{ 8 };
+
 #define WORLD_WIDTH		800
 #define WORLD_HEIGHT	800
 

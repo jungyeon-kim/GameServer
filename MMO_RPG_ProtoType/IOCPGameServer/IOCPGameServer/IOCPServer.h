@@ -29,7 +29,6 @@ extern "C"
 using namespace std;
 using namespace chrono;
 
-constexpr int VIEW_RANGE{ 8 }; 
 constexpr int NumOfSector{ (WORLD_WIDTH / SECTOR_WIDTH) * (WORLD_HEIGHT / SECTOR_HEIGHT) };
 
 enum class EnumOp { RECV, SEND, ACCEPT, RANDOM_MOVE, OVERLAP, RESPAWN, RECOVERY };

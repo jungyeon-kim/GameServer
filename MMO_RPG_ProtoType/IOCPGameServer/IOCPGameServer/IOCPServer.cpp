@@ -770,7 +770,6 @@ void WorkerThread()
 
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)
-                {
                     if (IsPlayer(PlayerID))
                     {
                         ExOverlapped* ExOver{ new ExOverlapped{} };
@@ -778,7 +777,6 @@ void WorkerThread()
                         ExOver->PlayerID = PlayerID;
                         PostQueuedCompletionStatus(IOCP, 1, ObjectID, &ExOver->Over);
                     }
-                }
 
             for (auto& Sector : GetNearSectors(Clients[ObjectID].CurrentSector))
                 for (auto& PlayerID : Sector)

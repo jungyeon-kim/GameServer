@@ -447,8 +447,8 @@ void client_main()
 				black_tile.a_draw();
 			}
 		}
-	for(int i = avatar.PosX - 10; i < avatar.PosX + 9; ++i)
-		for (int j = avatar.PosY - 10; j < avatar.PosY + 9; ++j)
+	for(int i = avatar.PosX - VIEW_RANGE; i < avatar.PosX + VIEW_RANGE + 1; ++i)
+		for (int j = avatar.PosY - VIEW_RANGE; j < avatar.PosY + VIEW_RANGE + 1; ++j)
 		{
 			if (i < 0 || j < 0) continue;
 
