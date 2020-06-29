@@ -932,10 +932,13 @@ void WorkerThread()
             // 에이스타 서치
             const string& Dir{ GetNearestDir(ObjectID, Clients[ObjectID].MoveTargetID) };
 
-            if (Dir == "Up") --PosY;
-            else if (Dir == "Down") ++PosY;
-            else if (Dir == "Left") --PosX;
-            else if (Dir == "Right") ++PosX;
+            if (!IsNear(ObjectID, Clients[ObjectID].MoveTargetID, 0))
+            {
+                if (Dir == "Up") --PosY;
+                else if (Dir == "Down") ++PosY;
+                else if (Dir == "Left") --PosX;
+                else if (Dir == "Right") ++PosX;
+            }
 
             // 섹터 재배정
             SetSector(ObjectID, PosX, PosY);
