@@ -70,7 +70,7 @@ void InitNPCs()
         luaL_openlibs(L);
         luaL_loadfile(L, "NPC.LUA");
         lua_pcall(L, 0, 0, 0);
-        lua_getglobal(L, "SetID");  // 함수를 push
+        lua_getglobal(L, "SetID");      // 함수를 push
         lua_pushnumber(L, i);           // SetID함수의 인자 push
         lua_pcall(L, 1, 0, 0);          // 스택에는 리턴값만 남게됨
         lua_pop(L, 1);                  // 리턴값 pop
@@ -1023,7 +1023,7 @@ void WorkerThread()
             lua_State* L{ Clients[ObjectID].L };
             lua_getglobal(L, "BeginOverlap");
             lua_pushnumber(L, ExOver->PlayerID);
-            int Error{ lua_pcall(L, 1, 0, 0) };
+            int Error{ lua_pcall(L, 1, 0, 0) }; // 루아 스테이트, 인자 개수, 리턴 값 개수, 에러메세지 핸들러
             //#if defined(_DEBUG)
             //if (Error) cout << lua_tostring(L, -1) << endl;
             //#endif
@@ -1137,7 +1137,6 @@ int main()
         sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, NULL, &AcceptOver.Over);
 
     vector<thread> Workers{};
-    // 현재 PC의 코어가 6개이므로 6개의 스레드 생성
     for (int i = 0; i < 6; ++i) Workers.emplace_back(WorkerThread);
 
     thread Timer{ TimerThread };
